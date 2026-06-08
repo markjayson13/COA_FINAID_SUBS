@@ -17,6 +17,8 @@ from coa_finaid_subs.prepare_analysis_panel import (
     parse_int_list,
     parse_years,
     resolve_columns,
+    sector_output_specs,
+    sector_scope_label,
 )
 
 
@@ -244,6 +246,8 @@ def audit_variable_config(
     specs = load_variable_specs(variable_config)
     years = parse_years(years_spec)
     sectors = parse_int_list(sectors_spec)
+    sector_label = sector_scope_label(sectors)
+    output_dir = output_dir / sector_label
     output_dir.mkdir(parents=True, exist_ok=True)
 
     schema_cols = pq.read_schema(input_panel).names
@@ -284,28 +288,63 @@ def audit_variable_config(
     }
 
 
+def audit_variable_outputs(
+    input_panel: Path,
+    output_dir: Path,
+    variable_config: Path = DEFAULT_VARIABLE_CONFIG,
+    years_spec: str = "2009:2023",
+    sectors_spec: str | None = None,
+    title_iv_flag: int = 1,
+    include_forprofit_diagnostic: bool = False,
+) -> dict[str, dict[str, Path]]:
+    outputs: dict[str, dict[str, Path]] = {}
+    for sector_spec in sector_output_specs(sectors_spec, include_forprofit_diagnostic):
+        paths = audit_variable_config(
+            input_panel=input_panel,
+            output_dir=output_dir,
+            variable_config=variable_config,
+            years_spec=years_spec,
+            sectors_spec=sector_spec,
+            title_iv_flag=title_iv_flag,
+        )
+        label = sector_scope_label(parse_int_list(sector_spec))
+        outputs[label] = paths
+    return outputs
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Audit the COA/headroom variable configuration against a clean IPEDS panel.")
     p.add_argument("--input-panel", required=True, help="Input clean IPEDS panel parquet")
     p.add_argument("--variable-config", default=str(DEFAULT_VARIABLE_CONFIG), help="Variable-selection CSV")
     p.add_argument("--output-dir", default="outputs/variable_audit", help="Output directory")
     p.add_argument("--years", default="2009:2023", help='Analysis years, for example "2009:2023"')
-    p.add_argument("--sectors", default=DEFAULT_MAIN_SECTORS_SPEC, help="Comma-separated SECTOR codes")
+    p.add_argument(
+        "--sectors",
+        default=None,
+        help="Comma-separated SECTOR codes. When omitted, writes baseline, public, and private nonprofit audits.",
+    )
+    p.add_argument(
+        "--include-forprofit-diagnostic",
+        action="store_true",
+        help="Also write the private for-profit diagnostic audit.",
+    )
     p.add_argument("--title-iv-flag", type=int, default=1, help="Required PSET4FLG value")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    outputs = audit_variable_config(
+    outputs = audit_variable_outputs(
         input_panel=Path(args.input_panel),
         output_dir=Path(args.output_dir),
         variable_config=Path(args.variable_config),
         years_spec=args.years,
         sectors_spec=args.sectors,
         title_iv_flag=args.title_iv_flag,
+        include_forprofit_diagnostic=args.include_forprofit_diagnostic,
     )
-    print("Wrote " + ", ".join(str(path) for path in outputs.values()))
+    for sector_label, paths in outputs.items():
+        print(f"Wrote {sector_label}: " + ", ".join(str(path) for path in paths.values()))
 
 
 if __name__ == "__main__":

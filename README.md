@@ -25,7 +25,7 @@ SECTOR in (1, 2)
 year = 2009:2023
 ```
 
-Private for-profit institutions are not part of the baseline sample. They can be built as a diagnostic sample by passing `--sectors 3`.
+Private for-profit institutions are not part of the baseline sample. They can be built as a diagnostic sample by passing `--sectors 3` or by adding `--include-forprofit-diagnostic` to the default run.
 
 The script does not modify the source panel. It writes a derived analysis parquet and audit tables under `outputs/`, which are ignored by Git.
 
@@ -59,6 +59,12 @@ export IPEDSDB_ROOT="/Users/markjaysonfarol13/Projects/IPEDSDB_Paneling"
 python scripts/prepare_analysis_panel.py
 ```
 
+The default run writes three scopes:
+
+- `public_private_nonprofit`, the baseline sample
+- `public`, the public-sector sample
+- `private_nonprofit`, the private nonprofit sample
+
 You can also pass paths directly:
 
 ```bash
@@ -70,9 +76,17 @@ python scripts/prepare_analysis_panel.py \
 
 ## Outputs
 
-The script writes:
+The preparation script writes each scope under its own directory, for example:
 
-- `analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet`
+```text
+outputs/analysis_panel/public_private_nonprofit/
+outputs/analysis_panel/public/
+outputs/analysis_panel/private_nonprofit/
+```
+
+Each directory contains:
+
+- `analysis_panel_coa_headroom_2009_2023_<scope>.parquet`
 - `analysis_build_summary.json`
 - `analysis_variable_manifest.csv`
 - `analysis_sample_counts.csv`
@@ -81,7 +95,9 @@ The script writes:
 - `analysis_metadata_flag_summary.csv`
 - `analysis_metadata_code_summary.csv`
 
-The variable audit writes:
+For example, the public-only output is named `analysis_panel_coa_headroom_2009_2023_public.parquet`.
+
+The variable audit follows the same directory layout under `outputs/variable_audit/`. Each scope directory contains:
 
 - `variable_config_coverage.csv`
 - `variable_group_coverage.csv`

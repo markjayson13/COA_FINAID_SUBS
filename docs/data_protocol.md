@@ -32,6 +32,14 @@ The 2009 start follows the first non-null year for the cost-of-attendance compon
 
 Private for-profit institutions are outside the baseline estimand. They remain buildable as a diagnostic sample with `--sectors 3`.
 
+The default command also writes public-only and private nonprofit-only extracts. Those sector files are built from the same source panel and the same variable contract, but they live in separate output directories:
+
+```text
+outputs/analysis_panel/public_private_nonprofit/
+outputs/analysis_panel/public/
+outputs/analysis_panel/private_nonprofit/
+```
+
 ## Data integrity rules
 
 Before writing the analysis panel, the script checks:
@@ -47,7 +55,7 @@ Before writing the analysis panel, the script checks:
 - component-level flags for imputed, revised, or parent-linked records
 - SHA-256 hashes for the input panel, input dictionary, and output analysis parquet
 
-The selected variable file is also auditable against the source panel. The audit reports column presence, coverage by variable, coverage by variable group, and complete-case counts for the main empirical scenarios. This matters because some IPEDS fields are sector-specific or only begin in later years. The net-price income-band fields are handled this way: public rows use `NPIS*`, private rows use `NPT*`, and the script writes harmonized `NET_PRICE_*` fields.
+The selected variable file is also auditable against the source panel. The audit reports column presence, coverage by variable, coverage by variable group, and complete-case counts for the main empirical scenarios. The audit uses the same sector directories as the analysis-panel build. This matters because some IPEDS fields are sector-specific or only begin in later years. The net-price income-band fields are handled this way: public rows use `NPIS*`, private rows use `NPT*`, and the script writes harmonized `NET_PRICE_*` fields.
 
 The metadata fields are kept in two forms. The raw `IMP_*`, `LOCK_*`, `REV_*`, `IDX_*`, `PRCH_*`, and parent-child allocation fields remain in the extract. The script also writes conservative derived flags. A component is flagged as imputed when its `IMP_*` code is neither the baseline reported code nor the not-applicable code. It is flagged as revised when `REV_*` equals one. It is flagged as parent-linked when IPEDS reports a parent `UNITID` in `IDX_*` or a positive parent-child allocation factor. The audit also writes raw code counts for `IMP_*`, `LOCK_*`, `REV_*`, and `PRCH_*` fields.
 

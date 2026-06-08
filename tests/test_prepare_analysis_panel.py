@@ -7,8 +7,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from coa_finaid_subs.audit_variable_config import audit_variable_config
-from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_panel
+from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
+from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -287,7 +287,8 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
 
     assert summary["analysis_rows"] == 2
     assert summary["sector_scope"] == "public_private_nonprofit"
-    analysis_path = output_dir / "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet"
+    scoped_output_dir = output_dir / "public_private_nonprofit"
+    analysis_path = scoped_output_dir / "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet"
     out = pd.read_parquet(analysis_path)
     assert out["UNITID"].tolist() == [1, 2]
     assert "EXTRA_DROP" not in out.columns
@@ -329,20 +330,71 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert bool(second["FLAG_IPEDS_F_REVISED"]) is False
     assert bool(second["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]) is False
 
-    manifest = pd.read_csv(output_dir / "analysis_variable_manifest.csv")
+    manifest = pd.read_csv(scoped_output_dir / "analysis_variable_manifest.csv")
     assert manifest.loc[manifest["varname"] == "PGRNT_A", "group"].iloc[0] == "ftft_pell"
     assert manifest.loc[manifest["varname"] == "NET_PRICE_0_30000", "group"].iloc[0] == "derived_net_price"
     assert manifest.loc[manifest["varname"] == "FLAG_IPEDS_SFA_IMPUTED", "group"].iloc[0] == "derived_metadata_flag"
-    sample = pd.read_csv(output_dir / "analysis_sample_counts.csv")
+    sample = pd.read_csv(scoped_output_dir / "analysis_sample_counts.csv")
     assert int(sample.loc[sample["sample"] == "analysis_four_year_titleiv_public_private_nonprofit", "rows"].iloc[0]) == 2
-    metadata = pd.read_csv(output_dir / "analysis_metadata_flag_summary.csv")
+    metadata = pd.read_csv(scoped_output_dir / "analysis_metadata_flag_summary.csv")
     flagged = metadata[
         (metadata["scope"] == "overall")
         & (metadata["flag"] == "FLAG_IPEDS_SFA_IMPUTED")
     ]["flagged_rows"].iloc[0]
     assert int(flagged) == 1
-    metadata_codes = pd.read_csv(output_dir / "analysis_metadata_code_summary.csv")
+    metadata_codes = pd.read_csv(scoped_output_dir / "analysis_metadata_code_summary.csv")
     assert "LOCK_SFA" in set(metadata_codes["varname"])
+
+
+def test_prepare_analysis_outputs_writes_baseline_and_sector_splits(tmp_path: Path) -> None:
+    panel_path = tmp_path / "panel.parquet"
+    dictionary_path = tmp_path / "dictionary.parquet"
+    output_dir = tmp_path / "outputs"
+    write_parquet(panel_path, panel_rows())
+    write_parquet(dictionary_path, dictionary_rows())
+
+    summaries = prepare_analysis_outputs(
+        input_panel=panel_path,
+        dictionary=dictionary_path,
+        output_dir=output_dir,
+        variable_config=VARIABLE_CONFIG,
+    )
+
+    labels = [summary["sector_scope"] for summary in summaries]
+    assert labels == ["public_private_nonprofit", "public", "private_nonprofit"]
+    assert not (output_dir / "private_forprofit_diagnostic").exists()
+
+    public = pd.read_parquet(output_dir / "public" / "analysis_panel_coa_headroom_2009_2023_public.parquet")
+    private_np = pd.read_parquet(
+        output_dir / "private_nonprofit" / "analysis_panel_coa_headroom_2009_2023_private_nonprofit.parquet"
+    )
+    assert public["UNITID"].tolist() == [1]
+    assert private_np["UNITID"].tolist() == [2]
+
+
+def test_prepare_analysis_outputs_can_include_forprofit_diagnostic(tmp_path: Path) -> None:
+    panel_path = tmp_path / "panel.parquet"
+    dictionary_path = tmp_path / "dictionary.parquet"
+    output_dir = tmp_path / "outputs"
+    write_parquet(panel_path, panel_rows())
+    write_parquet(dictionary_path, dictionary_rows())
+
+    summaries = prepare_analysis_outputs(
+        input_panel=panel_path,
+        dictionary=dictionary_path,
+        output_dir=output_dir,
+        variable_config=VARIABLE_CONFIG,
+        include_forprofit_diagnostic=True,
+    )
+
+    labels = [summary["sector_scope"] for summary in summaries]
+    assert labels == ["public_private_nonprofit", "public", "private_nonprofit", "private_forprofit_diagnostic"]
+    diagnostic = pd.read_parquet(
+        output_dir
+        / "private_forprofit_diagnostic"
+        / "analysis_panel_coa_headroom_2009_2023_private_forprofit_diagnostic.parquet"
+    )
+    assert diagnostic["UNITID"].tolist() == [6]
 
 
 def test_prepare_analysis_panel_fails_on_duplicate_unitid_year(tmp_path: Path) -> None:
@@ -377,7 +429,7 @@ def test_prepare_analysis_panel_can_build_forprofit_diagnostic_sample(tmp_path: 
 
     assert summary["analysis_rows"] == 1
     assert summary["sector_scope"] == "private_forprofit_diagnostic"
-    analysis_path = output_dir / "analysis_panel_coa_headroom_2009_2023_private_forprofit_diagnostic.parquet"
+    analysis_path = output_dir / "private_forprofit_diagnostic" / "analysis_panel_coa_headroom_2009_2023_private_forprofit_diagnostic.parquet"
     out = pd.read_parquet(analysis_path)
     assert out["UNITID"].tolist() == [6]
 
@@ -423,6 +475,7 @@ def test_audit_variable_config_writes_coverage_outputs(tmp_path: Path) -> None:
     metadata_flags = pd.read_csv(outputs["metadata_flags"])
     metadata_codes = pd.read_csv(outputs["metadata_codes"])
     assert {"coverage", "groups", "complete_cases", "metadata_flags", "metadata_codes"} == set(outputs)
+    assert outputs["coverage"].parent == output_dir / "public_private_nonprofit"
     assert coverage.loc[coverage["varname"] == "PGRNT_A", "coverage"].iloc[0] == 1.0
     primary_rows = complete_cases.loc[
         complete_cases["scenario"] == "primary_headroom_pell_institutional_avg", "rows"
@@ -431,3 +484,22 @@ def test_audit_variable_config_writes_coverage_outputs(tmp_path: Path) -> None:
     assert "net_price_current_income_bands_sector_appropriate" in set(complete_cases["scenario"])
     assert "FLAG_IPEDS_SFA_IMPUTED" in set(metadata_flags["flag"])
     assert "LOCK_SFA" in set(metadata_codes["varname"])
+
+
+def test_audit_variable_outputs_writes_default_sector_audits(tmp_path: Path) -> None:
+    panel_path = tmp_path / "panel.parquet"
+    output_dir = tmp_path / "audit"
+    write_parquet(panel_path, panel_rows())
+
+    outputs = audit_variable_outputs(
+        input_panel=panel_path,
+        output_dir=output_dir,
+        variable_config=VARIABLE_CONFIG,
+    )
+
+    assert set(outputs) == {"public_private_nonprofit", "public", "private_nonprofit"}
+    assert not (output_dir / "private_forprofit_diagnostic").exists()
+    public_cases = pd.read_csv(outputs["public"]["complete_cases"])
+    private_cases = pd.read_csv(outputs["private_nonprofit"]["complete_cases"])
+    assert int(public_cases.loc[public_cases["scenario"] == "primary_headroom_pell_institutional_avg", "rows"].iloc[0]) == 1
+    assert int(private_cases.loc[private_cases["scenario"] == "primary_headroom_pell_institutional_avg", "rows"].iloc[0]) == 1

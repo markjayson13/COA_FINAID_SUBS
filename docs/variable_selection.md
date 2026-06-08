@@ -20,7 +20,7 @@ SECTOR in (1, 2)
 year = 2009:2023
 ```
 
-Private for-profit institutions are not part of the baseline sample. They can be built separately with `--sectors 3` for diagnostic or appendix checks.
+Private for-profit institutions are not part of the baseline sample. They can be built separately with `--sectors 3` for diagnostic or appendix checks. The default build writes the baseline sample plus public-only and private nonprofit-only sector files.
 
 The primary headroom measures use the current tuition-and-fee, books, room-and-board, and other-expense fields:
 
@@ -91,6 +91,8 @@ With the local panel verified on June 8, 2026:
 - selected raw variables: 215
 - missing selected variables in the source panel: 0
 - main sample: 35,443 institution-years and 2,774 institutions
+- public-sector file: 11,215 institution-years and 882 institutions
+- private nonprofit file: 24,228 institution-years and 1,903 institutions
 - primary headroom, Pell, and institutional-grant complete cases: 25,023 institution-years and 2,200 institutions
 - primary plus FTFT totals and denominator: 26,051 institution-years and 2,247 institutions
 - all-undergraduate aid family: 29,520 institution-years and 2,302 institutions

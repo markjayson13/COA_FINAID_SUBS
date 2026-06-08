@@ -17,6 +17,8 @@ import pyarrow.parquet as pq
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VARIABLE_CONFIG = REPO_ROOT / "config" / "analysis_variables.csv"
 DEFAULT_MAIN_SECTORS_SPEC = "1,2"
+DEFAULT_SECTOR_OUTPUT_SPECS = (DEFAULT_MAIN_SECTORS_SPEC, "1", "2")
+FORPROFIT_DIAGNOSTIC_SECTORS_SPEC = "3"
 KEY_VARS = ("year", "UNITID")
 CLASSIFICATION_VARS = (
     "PSET4FLG",
@@ -283,6 +285,28 @@ def parse_years(spec: str) -> list[int]:
 
 def parse_int_list(spec: str) -> list[int]:
     return [int(part.strip()) for part in spec.split(",") if part.strip()]
+
+
+def normalize_sector_spec(spec: str) -> str:
+    return ",".join(str(sector) for sector in sorted(set(parse_int_list(spec))))
+
+
+def sector_output_specs(sectors_spec: str | None = None, include_forprofit_diagnostic: bool = False) -> list[str]:
+    specs = [sectors_spec] if sectors_spec else list(DEFAULT_SECTOR_OUTPUT_SPECS)
+    if include_forprofit_diagnostic:
+        specs.append(FORPROFIT_DIAGNOSTIC_SECTORS_SPEC)
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for spec in specs:
+        if spec is None:
+            continue
+        key = normalize_sector_spec(spec)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    return normalized
 
 
 def sector_scope_label(sectors: list[int]) -> str:
@@ -991,6 +1015,9 @@ def prepare_analysis_panel(
     specs = load_variable_specs(variable_config)
     years = parse_years(years_spec)
     sectors = parse_int_list(sectors_spec)
+    sector_label = sector_scope_label(sectors)
+    output_root = output_dir
+    output_dir = output_root / sector_label
     output_dir.mkdir(parents=True, exist_ok=True)
 
     schema_cols = pq.read_schema(input_panel).names
@@ -1009,7 +1036,6 @@ def prepare_analysis_panel(
     validate_core_money_nonnegative(analysis)
 
     year_label = f"{min(years)}_{max(years)}" if years else "all_years"
-    sector_label = sector_scope_label(sectors)
     analysis_path = output_dir / f"analysis_panel_coa_headroom_{year_label}_{sector_label}.parquet"
     manifest_path = output_dir / "analysis_variable_manifest.csv"
     sample_counts_path = output_dir / "analysis_sample_counts.csv"
@@ -1041,6 +1067,8 @@ def prepare_analysis_panel(
         "dictionary_sha256": sha256_file(dictionary) if dictionary.exists() else None,
         "variable_config": str(variable_config),
         "variable_config_sha256": sha256_file(variable_config),
+        "output_dir_root": str(output_root),
+        "output_dir": str(output_dir),
         "output_panel": str(analysis_path),
         "output_panel_sha256": sha256_file(analysis_path),
         "years": years,
@@ -1067,6 +1095,32 @@ def prepare_analysis_panel(
     return summary
 
 
+def prepare_analysis_outputs(
+    input_panel: Path,
+    dictionary: Path,
+    output_dir: Path,
+    variable_config: Path = DEFAULT_VARIABLE_CONFIG,
+    years_spec: str = "2009:2023",
+    sectors_spec: str | None = None,
+    title_iv_flag: int = 1,
+    include_forprofit_diagnostic: bool = False,
+) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    for sector_spec in sector_output_specs(sectors_spec, include_forprofit_diagnostic):
+        summaries.append(
+            prepare_analysis_panel(
+                input_panel=input_panel,
+                dictionary=dictionary,
+                output_dir=output_dir,
+                variable_config=variable_config,
+                years_spec=years_spec,
+                sectors_spec=sector_spec,
+                title_iv_flag=title_iv_flag,
+            )
+        )
+    return summaries
+
+
 def parse_args() -> argparse.Namespace:
     default_panel = default_input_panel()
     default_dict = default_dictionary()
@@ -1076,7 +1130,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--variable-config", default=str(DEFAULT_VARIABLE_CONFIG), help="Variable-selection CSV")
     p.add_argument("--output-dir", default="outputs/analysis_panel", help="Output directory")
     p.add_argument("--years", default="2009:2023", help='Analysis years, for example "2009:2023"')
-    p.add_argument("--sectors", default=DEFAULT_MAIN_SECTORS_SPEC, help="Comma-separated SECTOR codes")
+    p.add_argument(
+        "--sectors",
+        default=None,
+        help="Comma-separated SECTOR codes. When omitted, writes baseline, public, and private nonprofit outputs.",
+    )
+    p.add_argument(
+        "--include-forprofit-diagnostic",
+        action="store_true",
+        help="Also write the private for-profit diagnostic output.",
+    )
     p.add_argument("--title-iv-flag", type=int, default=1, help="Required PSET4FLG value")
     return p.parse_args()
 
@@ -1087,7 +1150,7 @@ def main() -> None:
         raise SystemExit("Provide --input-panel or set IPEDSDB_ROOT/IPEDS_ANALYSIS_PANEL")
     if not args.dictionary:
         raise SystemExit("Provide --dictionary or set IPEDSDB_ROOT/IPEDS_DICTIONARY")
-    summary = prepare_analysis_panel(
+    summaries = prepare_analysis_outputs(
         input_panel=Path(args.input_panel),
         dictionary=Path(args.dictionary),
         output_dir=Path(args.output_dir),
@@ -1095,12 +1158,14 @@ def main() -> None:
         years_spec=args.years,
         sectors_spec=args.sectors,
         title_iv_flag=args.title_iv_flag,
+        include_forprofit_diagnostic=args.include_forprofit_diagnostic,
     )
-    print(
-        "Wrote "
-        f"{summary['output_panel']} rows={summary['analysis_rows']:,} "
-        f"unitids={summary['analysis_unitids']:,} cols={summary['output_columns']:,}"
-    )
+    for summary in summaries:
+        print(
+            "Wrote "
+            f"{summary['output_panel']} rows={summary['analysis_rows']:,} "
+            f"unitids={summary['analysis_unitids']:,} cols={summary['output_columns']:,}"
+        )
 
 
 if __name__ == "__main__":

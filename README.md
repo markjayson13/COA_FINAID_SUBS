@@ -29,10 +29,12 @@ The script does not modify the source panel. It writes a derived analysis parque
 
 ## What is here
 
-- `config/analysis_variables.csv` lists the raw IPEDS variables selected for the first analysis extract.
+- `config/analysis_variables.csv` lists the raw IPEDS variables selected for the research extract.
 - `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
+- `scripts/audit_variable_config.py` checks the selected variables against the real panel.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
+- `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
 - `docs/replication.md` gives the minimum commands needed to rebuild the first extract.
 - `tests/` covers the main data-integrity checks with small synthetic panels.
 
@@ -74,6 +76,12 @@ The script writes:
 - `analysis_sample_counts.csv`
 - `analysis_missingness_by_year.csv`
 - `analysis_value_sanity.csv`
+
+The variable audit writes:
+
+- `variable_config_coverage.csv`
+- `variable_group_coverage.csv`
+- `complete_case_scenarios.csv`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

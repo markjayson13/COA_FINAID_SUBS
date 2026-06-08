@@ -22,6 +22,16 @@ python scripts/prepare_analysis_panel.py \
   --sectors 1,2,3
 ```
 
+## Variable audit
+
+```bash
+python scripts/audit_variable_config.py \
+  --input-panel "$IPEDSDB_ROOT/Panels/panel_clean_analysis_2004_2023.parquet" \
+  --output-dir outputs/variable_audit \
+  --years 2009:2023 \
+  --sectors 1,2,3
+```
+
 ## Expected first-stage outputs
 
 The default first-stage extract writes:
@@ -29,6 +39,8 @@ The default first-stage extract writes:
 - a four-year Title IV sample for 2009-2023
 - derived COA and headroom variables
 - cleaned net-price diagnostics
+- sector-harmonized finance controls
+- admissions, location, mission, and student-body controls
 - manifest and audit tables documenting all selected variables
 
-The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the primary sample contained 43,476 institution-years and 3,769 institutions.
+The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the primary sample contained 43,476 institution-years and 3,769 institutions. The expanded extract wrote 246 columns. The selected raw-variable contract contained 176 variables, all present in the source panel.

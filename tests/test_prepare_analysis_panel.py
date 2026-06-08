@@ -7,6 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from coa_finaid_subs.audit_variable_config import audit_variable_config
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_panel
 
 
@@ -30,6 +31,27 @@ def panel_rows() -> list[dict]:
         "HLOFFER": 5,
         "F2PELL": 1,
         "F3PELL": None,
+        "STABBR": "NV",
+        "FIPS": 32,
+        "OBEREG": 6,
+        "LOCALE": 11,
+        "INSTSIZE": 3,
+        "CCBASIC": 18,
+        "DEGGRANT": 1,
+        "UGOFFER": 1,
+        "HBCU": 2,
+        "TRIBAL": 2,
+        "LANDGRNT": 2,
+        "OPENADMP": 2,
+        "APPLCN": 1_000,
+        "ADMSSN": 600,
+        "ENRLT": 300,
+        "SATVR25": 500,
+        "SATVR75": 620,
+        "SATMT25": 510,
+        "SATMT75": 630,
+        "ACTCM25": 20,
+        "ACTCM75": 28,
         "CHG2AY0": 10_000,
         "CHG3AY0": 20_000,
         "CHG4AY0": 1_000,
@@ -50,6 +72,14 @@ def panel_rows() -> list[dict]:
         "PGRNT_N": 50,
         "PGRNT_P": 50.0,
         "PGRNT_T": 150_000,
+        "SGRNT_A": 2_000,
+        "SGRNT_N": 20,
+        "SGRNT_P": 20.0,
+        "SGRNT_T": 40_000,
+        "OFGRT_A": 500,
+        "OFGRT_N": 10,
+        "OFGRT_P": 10.0,
+        "OFGRT_T": 5_000,
         "IGRNT_A": 5_000,
         "IGRNT_N": 45,
         "IGRNT_P": 45.0,
@@ -62,13 +92,26 @@ def panel_rows() -> list[dict]:
         "FLOAN_N": 35,
         "FLOAN_P": 35.0,
         "FLOAN_T": 175_000,
+        "OLOAN_A": 1_000,
+        "OLOAN_N": 5,
+        "OLOAN_P": 5.0,
+        "OLOAN_T": 5_000,
         "SCFA2": 100,
         "SCFA1N": 90,
         "SCFA1P": 90.0,
         "ANYAIDN": 80,
         "ANYAIDP": 80.0,
+        "SCUGRAD": 120,
+        "SCUGFFN": 90,
+        "SCUGFFP": 75.0,
         "UAGRNTA": 4_400,
+        "UAGRNTN": 110,
+        "UAGRNTP": 91.7,
+        "UAGRNTT": 528_000,
         "UFLOANA": 5_500,
+        "UFLOANN": 60,
+        "UFLOANP": 50.0,
+        "UFLOANT": 330_000,
         "UPGRNTA": 3_300,
         "UPGRNTN": 100,
         "UPGRNTP": 50.0,
@@ -78,12 +121,34 @@ def panel_rows() -> list[dict]:
         "NPT430": 3_200,
         "NPT440": 4_200,
         "NPT450": 5_200,
+        "F1A06": 10_000_000,
+        "F1B01": 3_000_000,
+        "F1B11": 1_000_000,
+        "F1B12": 200_000,
+        "F1B14": 300_000,
+        "F1B15": 100_000,
+        "F1D01": 12_000_000,
+        "F1D02": 11_000_000,
+        "F1H01": 2_000_000,
+        "F1C011": 4_000_000,
+        "F1C051": 1_500_000,
+        "F1C061": 1_000_000,
+        "F1C071": 900_000,
+        "F2A02": 20_000_000,
+        "F2B01": 15_000_000,
+        "F2B02": 14_000_000,
+        "F2D01": 6_000_000,
+        "F2H01": 5_000_000,
+        "F2E011": 5_000_000,
+        "F2E041": 2_000_000,
+        "F2E051": 1_100_000,
+        "F2E061": 1_200_000,
         "EXTRA_DROP": "not selected",
     }
     return [
         {"year": 2008, "UNITID": 1, "PSET4FLG": 1, "SECTOR": 1, **base},
         {"year": 2009, "UNITID": 1, "PSET4FLG": 1, "SECTOR": 1, **base, "NPT410": -10},
-        {"year": 2009, "UNITID": 2, "PSET4FLG": 1, "SECTOR": 2, **base, "CHG2AY0": 12_000},
+        {"year": 2009, "UNITID": 2, "PSET4FLG": 1, "SECTOR": 2, **base, "CONTROL": 2, "CHG2AY0": 12_000},
         {"year": 2009, "UNITID": 3, "PSET4FLG": 2, "SECTOR": 1, **base},
         {"year": 2009, "UNITID": 4, "PSET4FLG": 1, "SECTOR": 4, **base},
         {"year": 2010, "UNITID": 5, "PSET4FLG": None, "SECTOR": None, **base},
@@ -104,7 +169,12 @@ def dictionary_rows() -> list[dict]:
             ("PGRNT_A", "Average amount of Pell grant aid received", "SFA"),
             ("PGRNT_T", "Total amount of Pell grant aid received", "SFA"),
             ("IGRNT_A", "Average amount of institutional grant aid received", "SFA"),
+            ("IGRNT_T", "Total amount of institutional grant aid received", "SFA"),
             ("NPT410", "Average net price income 0-30000", "SFA"),
+            ("STABBR", "State abbreviation", "HD"),
+            ("OPENADMP", "Open admission policy", "IC"),
+            ("F1D01", "Total revenues and other additions", "F"),
+            ("F2B01", "Total revenues and investment return", "F"),
         ]:
             rows.append(
                 {
@@ -130,8 +200,17 @@ def test_variable_config_contains_core_inputs() -> None:
     assert "CHG9AY0" in names
     assert "PGRNT_A" in names
     assert "PGRNT_T" in names
+    assert "SGRNT_T" in names
+    assert "OFGRT_T" in names
+    assert "OLOAN_T" in names
     assert "UPGRNTA" in names
     assert "UPGRNTT" in names
+    assert "STABBR" in names
+    assert "LOCALE" in names
+    assert "OPENADMP" in names
+    assert "F1D01" in names
+    assert "F2B01" in names
+    assert "F3B01" in names
 
 
 def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_path: Path) -> None:
@@ -159,6 +238,21 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert first["HEADROOM_ON"] == 9_000
     assert first["COA_OFF_NF"] == 21_000
     assert first["HEADROOM_OFF_NF"] == 11_000
+    assert first["PGRNT_PER_FTFT_COHORT"] == pytest.approx(150_000 / 90)
+    assert first["IGRNT_PER_FTFT_COHORT"] == pytest.approx(225_000 / 90)
+    assert first["PELL_SHARE_OF_TOTAL_GRANT_FTFT"] == pytest.approx(150_000 / 320_000)
+    assert first["ADMIT_RATE"] == pytest.approx(0.6)
+    assert first["YIELD_RATE"] == pytest.approx(0.5)
+    assert first["SAT_TOTAL_MIDPOINT"] == 1_130
+    assert first["ACT_COMPOSITE_MIDPOINT"] == 24
+    assert first["FIN_TOTAL_REVENUE"] == 12_000_000
+    assert first["FIN_TUITION_REVENUE"] == 3_000_000
+    assert first["FIN_STATE_LOCAL_APPROPS_PUBLIC"] == 1_600_000
+
+    second = out[out["UNITID"] == 2].iloc[0]
+    assert second["FIN_TOTAL_REVENUE"] == 15_000_000
+    assert second["FIN_TUITION_REVENUE"] == 6_000_000
+    assert pd.isna(second["FIN_STATE_LOCAL_APPROPS_PUBLIC"])
     assert first["NPT410"] == -10
     assert pd.isna(first["NPT410_CLEAN"])
     assert bool(first["FLAG_NEGATIVE_NPT410"]) is True
@@ -208,3 +302,20 @@ def test_prepare_analysis_panel_accepts_string_coded_sample_fields(tmp_path: Pat
 
     assert summary["analysis_rows"] == 2
 
+
+def test_audit_variable_config_writes_coverage_outputs(tmp_path: Path) -> None:
+    panel_path = tmp_path / "panel.parquet"
+    output_dir = tmp_path / "audit"
+    write_parquet(panel_path, panel_rows())
+
+    outputs = audit_variable_config(
+        input_panel=panel_path,
+        output_dir=output_dir,
+        variable_config=VARIABLE_CONFIG,
+    )
+
+    coverage = pd.read_csv(outputs["coverage"])
+    complete_cases = pd.read_csv(outputs["complete_cases"])
+    assert {"coverage", "groups", "complete_cases"} == set(outputs)
+    assert coverage.loc[coverage["varname"] == "PGRNT_A", "coverage"].iloc[0] == 1.0
+    assert "primary_headroom_pell_institutional_avg" in set(complete_cases["scenario"])

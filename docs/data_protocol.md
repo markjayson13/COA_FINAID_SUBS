@@ -43,6 +43,8 @@ Before writing the analysis panel, the script checks:
 - negative net-price values flagged and copied to cleaned fields with negatives set missing
 - SHA-256 hashes for the input panel, input dictionary, and output analysis parquet
 
+The selected variable file is also auditable against the source panel. The audit reports column presence, coverage by variable, coverage by variable group, and complete-case counts for the main empirical scenarios. This matters because some IPEDS fields are sector-specific or only begin in later years.
+
 ## Generated files
 
 Generated files belong in `outputs/` and are ignored by Git. I commit the code and documentation needed to rebuild them, not the generated data files themselves.

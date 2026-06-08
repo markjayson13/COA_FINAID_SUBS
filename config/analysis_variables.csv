@@ -1,24 +1,79 @@
 varname,group,role,required
-year,key,panel key,true
-UNITID,key,panel key,true
-INSTNM,identity,diagnostic institution name,false
-OPEID,identity,diagnostic federal-aid linkage,false
+year,key,panel year,true
+UNITID,key,IPEDS institution identifier,true
+INSTNM,identity,institution name,false
+OPEID,identity,federal-aid linkage identifier,false
 PSET4FLG,sample,Title IV postsecondary sample flag,true
 PSEFLAG,sample,postsecondary sample diagnostic,false
-SECTOR,sample,four-year sector split,true
-CONTROL,sample,control split,true
+SECTOR,sample,IPEDS sector code for four-year sector split,true
+CONTROL,sample,public private nonprofit and private for-profit control,true
 ICLEVEL,sample,institution level,true
 HLOFFER,sample,highest offering diagnostic,false
 F2PELL,finance_pell_flag,FASB Pell accounting-treatment flag,false
 F3PELL,finance_pell_flag,for-profit Pell accounting-treatment flag,false
-CHG2AY0,coa,COA tuition and fees input,true
-CHG3AY0,coa,COA out-of-state tuition and fees input,false
-CHG4AY0,coa,COA books and supplies input,true
+STABBR,control_location,state abbreviation,true
+FIPS,control_location,FIPS state code,true
+OBEREG,control_location,geographic region,true
+COUNTYNM,control_location,county name,false
+CBSA,control_location,Core Based Statistical Area,false
+CBSATYPE,control_location,CBSA type,false
+CSA,control_location,Combined Statistical Area,false
+LOCALE,control_location,degree of urbanization,true
+LATITUDE,control_location,latitude,false
+LONGITUD,control_location,longitude,false
+INSTSIZE,control_mission_size,institution size category,true
+CARNEGIE,control_mission_size,legacy Carnegie classification,false
+CCBASIC,control_mission_size,Carnegie basic classification covering the main panel,true
+C18BASIC,control_mission_size,Carnegie 2018 basic classification,false
+C21BASIC,control_mission_size,Carnegie 2021 basic classification,false
+DEGGRANT,control_mission_size,degree-granting status,true
+UGOFFER,control_mission_size,undergraduate offering,true
+GROFFER,control_mission_size,graduate offering,false
+HBCU,control_mission_size,Historically Black College or University flag,true
+TRIBAL,control_mission_size,Tribal college flag,true
+LANDGRNT,control_mission_size,land-grant institution flag,true
+HOSPITAL,control_mission_size,hospital flag,false
+MEDICAL,control_mission_size,medical-degree flag,false
+CALSYS,control_calendar,calendar system,false
+RPTMTH,control_calendar,academic-year or program reporting method,false
+OPENADMP,control_admissions,open admission policy,true
+APPLCN,control_admissions,total applicants,false
+ADMSSN,control_admissions,total admissions,false
+ENRLT,control_admissions,total enrolled from admissions cohort,false
+SATVR25,control_admissions,SAT verbal 25th percentile,false
+SATVR75,control_admissions,SAT verbal 75th percentile,false
+SATMT25,control_admissions,SAT math 25th percentile,false
+SATMT75,control_admissions,SAT math 75th percentile,false
+SATPCT,control_admissions,percent submitting SAT scores,false
+ACTCM25,control_admissions,ACT composite 25th percentile,false
+ACTCM75,control_admissions,ACT composite 75th percentile,false
+ACTPCT,control_admissions,percent submitting ACT scores,false
+ALLONCAM,control_student_body,FTFT students required to live on campus,false
+COHRTSTU,control_student_body,any full-time first-time students enrolled,false
+FT_UG,control_student_body,full-time undergraduates enrolled,false
+PT_UG,control_student_body,part-time undergraduates enrolled,false
+FT_FTUG,control_student_body,full-time first-time undergraduates enrolled,false
+PT_FTUG,control_student_body,part-time first-time undergraduates enrolled,false
+SCUGRAD,control_student_body,total undergraduates in financial-aid cohort,false
+SCUGFFN,control_student_body,FTFT undergraduates in financial-aid cohort,false
+SCUGFFP,control_student_body,FTFT share of all undergraduates in financial-aid cohort,false
+APPLFEEU,control_price_access,undergraduate application fee,false
+DISTNCED,control_price_access,all programs offered completely by distance education,false
+CHG1AY0,coa,in-district tuition and fees input,false
+CHG2AY0,coa,in-state tuition and fees input,true
+CHG3AY0,coa,out-of-state tuition and fees input,false
+CHG4AY0,coa,books and supplies input,true
 CHG5AY0,coa,on-campus room and board input,false
 CHG6AY0,coa,on-campus other expenses input,false
 CHG7AY0,coa,off-campus not-with-family room and board input,true
 CHG8AY0,coa,off-campus not-with-family other expenses input,true
 CHG9AY0,coa,off-campus with-family other expenses input,false
+TUITION1,coa_split,in-district average tuition for full-time undergraduates,false
+TUITION2,coa_split,in-state average tuition for full-time undergraduates,false
+TUITION3,coa_split,out-of-state average tuition for full-time undergraduates,false
+FEE1,coa_split,in-district required fees for full-time undergraduates,false
+FEE2,coa_split,in-state required fees for full-time undergraduates,false
+FEE3,coa_split,out-of-state required fees for full-time undergraduates,false
 AGRNT_A,ftft_grant,average total grant aid for FTFT students,false
 AGRNT_N,ftft_grant,count receiving total grant aid for FTFT students,false
 AGRNT_P,ftft_grant,percent receiving total grant aid for FTFT students,false
@@ -31,6 +86,14 @@ PGRNT_A,ftft_pell,average Pell grant aid for FTFT students,true
 PGRNT_N,ftft_pell,count receiving Pell grants for FTFT students,false
 PGRNT_P,ftft_pell,percent receiving Pell grants for FTFT students,false
 PGRNT_T,ftft_pell,total Pell grant aid for FTFT students,false
+SGRNT_A,ftft_state_local_grant,average state and local grant aid for FTFT students,false
+SGRNT_N,ftft_state_local_grant,count receiving state and local grant aid for FTFT students,false
+SGRNT_P,ftft_state_local_grant,percent receiving state and local grant aid for FTFT students,false
+SGRNT_T,ftft_state_local_grant,total state and local grant aid for FTFT students,false
+OFGRT_A,ftft_other_federal_grant,average other federal grant aid for FTFT students,false
+OFGRT_N,ftft_other_federal_grant,count receiving other federal grant aid for FTFT students,false
+OFGRT_P,ftft_other_federal_grant,percent receiving other federal grant aid for FTFT students,false
+OFGRT_T,ftft_other_federal_grant,total other federal grant aid for FTFT students,false
 IGRNT_A,ftft_institutional_grant,average institutional grant aid for FTFT students,true
 IGRNT_N,ftft_institutional_grant,count receiving institutional grant aid for FTFT students,false
 IGRNT_P,ftft_institutional_grant,percent receiving institutional grant aid for FTFT students,false
@@ -43,20 +106,72 @@ FLOAN_A,ftft_federal_loan,average federal loan aid for FTFT students,false
 FLOAN_N,ftft_federal_loan,count receiving federal loan aid for FTFT students,false
 FLOAN_P,ftft_federal_loan,percent receiving federal loan aid for FTFT students,false
 FLOAN_T,ftft_federal_loan,total federal loan aid for FTFT students,false
-SCFA2,ftft_denominator,FTFT SFA cohort denominator,false
-SCFA1N,ftft_denominator,FTFT SFA count diagnostic,false
-SCFA1P,ftft_denominator,FTFT SFA percent diagnostic,false
+OLOAN_A,ftft_other_loan,average other loan aid for FTFT students,false
+OLOAN_N,ftft_other_loan,count receiving other loan aid for FTFT students,false
+OLOAN_P,ftft_other_loan,percent receiving other loan aid for FTFT students,false
+OLOAN_T,ftft_other_loan,total other loan aid for FTFT students,false
+SCFA2,ftft_denominator,total undergraduates for SFA diagnostics,false
+SCFA1N,ftft_denominator,FTFT SFA cohort count,false
+SCFA1P,ftft_denominator,FTFT SFA cohort share of all undergraduates,false
 ANYAIDN,ftft_denominator,count receiving any aid,false
 ANYAIDP,ftft_denominator,percent receiving any aid,false
 UAGRNTA,undergraduate_aid,average grant aid for all undergraduates,false
+UAGRNTN,undergraduate_aid,count receiving grant aid for all undergraduates,false
+UAGRNTP,undergraduate_aid,percent receiving grant aid for all undergraduates,false
+UAGRNTT,undergraduate_aid,total grant aid for all undergraduates,false
 UFLOANA,undergraduate_aid,average federal loan aid for all undergraduates,false
+UFLOANN,undergraduate_aid,count receiving federal loan aid for all undergraduates,false
+UFLOANP,undergraduate_aid,percent receiving federal loan aid for all undergraduates,false
+UFLOANT,undergraduate_aid,total federal loan aid for all undergraduates,false
 UPGRNTA,undergraduate_aid,average Pell grant aid for all undergraduates,false
 UPGRNTN,undergraduate_aid,count receiving Pell grants for all undergraduates,false
 UPGRNTP,undergraduate_aid,percent receiving Pell grants for all undergraduates,false
 UPGRNTT,undergraduate_aid,total Pell grant aid for all undergraduates,false
-NPT410,net_price,average net price for 0-30000 income band,false
-NPT420,net_price,average net price for 30001-48000 income band,false
-NPT430,net_price,average net price for 48001-75000 income band,false
-NPT440,net_price,average net price for 75001-110000 income band,false
-NPT450,net_price,average net price for over-110000 income band,false
-
+NPIST0,net_price_overall,average net price for grant-aid recipients current year,false
+NPIST1,net_price_overall,average net price for grant-aid recipients one-year lag,false
+NPIST2,net_price_overall,average net price for grant-aid recipients two-year lag,false
+NPGRN0,net_price_overall,average net price for grant or scholarship recipients current year,false
+NPGRN1,net_price_overall,average net price for grant or scholarship recipients one-year lag,false
+NPGRN2,net_price_overall,average net price for grant or scholarship recipients two-year lag,false
+NPT410,net_price_income,average net price for 0-30000 income band current year,false
+NPT420,net_price_income,average net price for 30001-48000 income band current year,false
+NPT430,net_price_income,average net price for 48001-75000 income band current year,false
+NPT440,net_price_income,average net price for 75001-110000 income band current year,false
+NPT450,net_price_income,average net price for over-110000 income band current year,false
+F1A06,finance_public_gasb,total assets for public GASB institutions,false
+F1B01,finance_public_gasb,tuition and fees revenue for public GASB institutions,false
+F1B09,finance_public_gasb,total operating revenues for public GASB institutions,false
+F1B10,finance_public_gasb,federal appropriations for public GASB institutions,false
+F1B11,finance_public_gasb,state appropriations for public GASB institutions,false
+F1B12,finance_public_gasb,local appropriations for public GASB institutions,false
+F1B13,finance_public_gasb,federal nonoperating grants for public GASB institutions,false
+F1B14,finance_public_gasb,state nonoperating grants for public GASB institutions,false
+F1B15,finance_public_gasb,local nonoperating grants for public GASB institutions,false
+F1D01,finance_public_gasb,total revenues and other additions for public GASB institutions,false
+F1D02,finance_public_gasb,total expenses and other deductions for public GASB institutions,false
+F1H01,finance_public_gasb,endowment assets at fiscal-year beginning for public GASB institutions,false
+F1C011,finance_public_gasb,instruction expense for public GASB institutions,false
+F1C051,finance_public_gasb,academic support expense for public GASB institutions,false
+F1C061,finance_public_gasb,student services expense for public GASB institutions,false
+F1C071,finance_public_gasb,institutional support expense for public GASB institutions,false
+F1C191,finance_public_gasb,total expenses and deductions for public GASB institutions,false
+F2A02,finance_private_np_fasb,total assets for private nonprofit FASB institutions,false
+F2B01,finance_private_np_fasb,total revenues and investment return for private nonprofit FASB institutions,false
+F2B02,finance_private_np_fasb,total expenses for private nonprofit FASB institutions,false
+F2D01,finance_private_np_fasb,tuition and fees revenue for private nonprofit FASB institutions,false
+F2H01,finance_private_np_fasb,endowment assets at fiscal-year beginning for private nonprofit FASB institutions,false
+F2E011,finance_private_np_fasb,instruction expense for private nonprofit FASB institutions,false
+F2E041,finance_private_np_fasb,academic support expense for private nonprofit FASB institutions,false
+F2E051,finance_private_np_fasb,student services expense for private nonprofit FASB institutions,false
+F2E061,finance_private_np_fasb,institutional support expense for private nonprofit FASB institutions,false
+F2E131,finance_private_np_fasb,total expenses for private nonprofit FASB institutions,false
+F3A01,finance_forprofit_fasb,total assets for private for-profit institutions,false
+F3B01,finance_forprofit_fasb,total revenues and investment return for private for-profit institutions,false
+F3B02,finance_forprofit_fasb,total expenses for private for-profit institutions,false
+F3D01,finance_forprofit_fasb,tuition and fees revenue for private for-profit institutions,false
+F3E07,finance_forprofit_fasb,total expenses for private for-profit institutions pre-2014,false
+F3E011,finance_forprofit_fasb,instruction expense for private for-profit institutions,false
+F3E03A1,finance_forprofit_fasb,academic support expense for private for-profit institutions,false
+F3E03B1,finance_forprofit_fasb,student services expense for private for-profit institutions,false
+F3E03C1,finance_forprofit_fasb,institutional support expense for private for-profit institutions,false
+F3E071,finance_forprofit_fasb,total expenses for private for-profit institutions 2014-forward,false

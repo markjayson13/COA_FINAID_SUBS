@@ -4,6 +4,8 @@ This document records the data boundary for the paper repository. I keep the IPE
 
 The point of the protocol is simple: a reader should be able to see where the input data came from, how the sample is defined, what the preparation script checks, and which files are generated locally.
 
+The source trail for each sample, variable, and cleaning decision is in `docs/data_decision_register.md`.
+
 ## Inputs
 
 The first preparation script requires two local files:
@@ -48,6 +50,13 @@ Before writing the analysis panel, the script checks:
 - no missing `UNITID` or `year`
 - required research variables present
 - explicit sample counts before and after filtering
+- panel balance by institution
+- first and last observed years within the analysis window
+- entry and exit reason audit based on full-panel status, `PSET4FLG`, and `SECTOR`
+- institution-years by sector and year
+- retention under minimum observed-year requirements
+- open-admissions status as the baseline admissions control
+- a separate selective-admissions robustness panel for admit-rate and test-score measures
 - nonnegative checks for core COA and aid money variables
 - raw net-price values retained
 - negative net-price values flagged and copied to cleaned fields with negatives set missing
@@ -57,7 +66,11 @@ Before writing the analysis panel, the script checks:
 
 The selected variable file is also auditable against the source panel. The audit reports column presence, coverage by variable, coverage by variable group, and complete-case counts for the main empirical scenarios. The audit uses the same sector directories as the analysis-panel build. This matters because some IPEDS fields are sector-specific or only begin in later years. The net-price income-band fields are handled this way: public rows use `NPIS*`, private rows use `NPT*`, and the script writes harmonized `NET_PRICE_*` fields.
 
+Admissions variables are handled in two layers. `OPENADMP` is kept in the baseline. Admit rates, yield, SAT score ranges, and ACT score ranges are derived in the analysis panel but are assigned to the selective-admissions robustness sample, not the main sample definition.
+
 The metadata fields are kept in two forms. The raw `IMP_*`, `LOCK_*`, `REV_*`, `IDX_*`, `PRCH_*`, and parent-child allocation fields remain in the extract. The script also writes conservative derived flags. A component is flagged as imputed when its `IMP_*` code is neither the baseline reported code nor the not-applicable code. It is flagged as revised when `REV_*` equals one. It is flagged as parent-linked when IPEDS reports a parent `UNITID` in `IDX_*` or a positive parent-child allocation factor. The audit also writes raw code counts for `IMP_*`, `LOCK_*`, `REV_*`, and `PRCH_*` fields.
+
+The entry and exit tables use first and last observed years within this research window. They do not, by themselves, prove that an institution opened or closed. An institution first observed after 2009 may be a true entrant, a campus that became eligible for this sample, or a record whose reporting status changed. An institution last observed before 2023 may have closed, merged, changed sector, left Title IV, or stopped meeting the four-year sample rule.
 
 ## Generated files
 

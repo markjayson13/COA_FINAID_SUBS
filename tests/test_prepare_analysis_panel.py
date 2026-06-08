@@ -84,8 +84,10 @@ def panel_rows() -> list[dict]:
         "SATVR75": 620,
         "SATMT25": 510,
         "SATMT75": 630,
+        "SATPCT": 60,
         "ACTCM25": 20,
         "ACTCM75": 28,
+        "ACTPCT": 40,
         "CHG2AY0": 10_000,
         "CHG3AY0": 20_000,
         "CHG4AY0": 1_000,
@@ -199,7 +201,22 @@ def panel_rows() -> list[dict]:
             "IDX_SFA": 99_999,
             "PCSFA_F": 50,
         },
-        {"year": 2009, "UNITID": 2, "PSET4FLG": 1, "SECTOR": 2, **base, "CONTROL": 2, "CHG2AY0": 12_000},
+        {
+            "year": 2009,
+            "UNITID": 2,
+            "PSET4FLG": 1,
+            "SECTOR": 2,
+            **base,
+            "CONTROL": 2,
+            "CHG2AY0": 12_000,
+            "ADMSSN": 900,
+            "SATVR25": 430,
+            "SATVR75": 530,
+            "SATMT25": 440,
+            "SATMT75": 540,
+            "ACTCM25": 17,
+            "ACTCM75": 23,
+        },
         {"year": 2009, "UNITID": 3, "PSET4FLG": 2, "SECTOR": 1, **base},
         {"year": 2009, "UNITID": 4, "PSET4FLG": 1, "SECTOR": 4, **base},
         {"year": 2009, "UNITID": 6, "PSET4FLG": 1, "SECTOR": 3, **base, "CONTROL": 3, "CHG2AY0": 13_000},
@@ -305,6 +322,14 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert first["YIELD_RATE"] == pytest.approx(0.5)
     assert first["SAT_TOTAL_MIDPOINT"] == 1_130
     assert first["ACT_COMPOSITE_MIDPOINT"] == 24
+    assert bool(first["OPEN_ADMISSIONS_FLAG"]) is False
+    assert bool(first["SELECTIVE_ADMISSIONS_FLAG"]) is True
+    assert bool(first["VALID_ADMIT_RATE_FLAG"]) is True
+    assert bool(first["SELECTIVE_ADMISSIONS_ROBUSTNESS_SAMPLE"]) is True
+    assert first["TEST_SCORE_REPORTING_SHARE"] == 60
+    assert first["SELECTIVITY_INDEX"] == pytest.approx(1.0)
+    assert first["SELECTIVITY_PERCENTILE_WITHIN_YEAR"] == pytest.approx(1.0)
+    assert first["SELECTIVITY_CATEGORY"] == "highly_selective"
     assert first["FIN_TOTAL_REVENUE"] == 12_000_000
     assert first["FIN_TUITION_REVENUE"] == 3_000_000
     assert first["FIN_STATE_LOCAL_APPROPS_PUBLIC"] == 1_600_000
@@ -313,6 +338,11 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert second["FIN_TOTAL_REVENUE"] == 15_000_000
     assert second["FIN_TUITION_REVENUE"] == 6_000_000
     assert pd.isna(second["FIN_STATE_LOCAL_APPROPS_PUBLIC"])
+    assert second["ADMIT_RATE"] == pytest.approx(0.9)
+    assert second["SAT_TOTAL_MIDPOINT"] == 970
+    assert second["ACT_COMPOSITE_MIDPOINT"] == 20
+    assert second["SELECTIVITY_INDEX"] == pytest.approx(-1.0)
+    assert second["SELECTIVITY_CATEGORY"] == "moderately_selective"
     assert first["NPT410"] == -10
     assert pd.isna(first["NPT410_CLEAN"])
     assert bool(first["FLAG_NEGATIVE_NPT410"]) is True
@@ -336,6 +366,28 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert manifest.loc[manifest["varname"] == "FLAG_IPEDS_SFA_IMPUTED", "group"].iloc[0] == "derived_metadata_flag"
     sample = pd.read_csv(scoped_output_dir / "analysis_sample_counts.csv")
     assert int(sample.loc[sample["sample"] == "analysis_four_year_titleiv_public_private_nonprofit", "rows"].iloc[0]) == 2
+    balance = pd.read_csv(scoped_output_dir / "analysis_panel_balance_by_institution.csv")
+    assert set(balance["UNITID"]) == {1, 2}
+    assert set(balance["years_observed"]) == {1}
+    assert bool(balance.loc[balance["UNITID"] == 1, "balanced_full_window"].iloc[0]) is False
+    assert bool(balance.loc[balance["UNITID"] == 1, "last_observed_before_end"].iloc[0]) is True
+    balance_summary = pd.read_csv(scoped_output_dir / "analysis_panel_balance_summary.csv")
+    overall_balance = balance_summary[balance_summary["scope"] == "overall"].iloc[0]
+    assert int(overall_balance["institutions"]) == 2
+    assert int(overall_balance["balanced_institutions"]) == 0
+    entry_exit = pd.read_csv(scoped_output_dir / "analysis_entry_exit_by_sector_year.csv")
+    entry_2009 = entry_exit[(entry_exit["sector"] == "all") & (entry_exit["year"] == 2009)].iloc[0]
+    assert int(entry_2009["first_observed_in_window"]) == 2
+    assert int(entry_2009["first_observed_after_window_start"]) == 0
+    assert int(entry_2009["last_observed_before_window_end"]) == 2
+    sector_year = pd.read_csv(scoped_output_dir / "analysis_institution_years_by_sector_year.csv")
+    assert int(sector_year[(sector_year["sector"] == "public") & (sector_year["year"] == 2009)]["institution_years"].iloc[0]) == 1
+    assert int(
+        sector_year[(sector_year["sector"] == "private_nonprofit") & (sector_year["year"] == 2009)]["institution_years"].iloc[0]
+    ) == 1
+    min_years = pd.read_csv(scoped_output_dir / "analysis_min_years_sensitivity.csv")
+    assert int(min_years[(min_years["sector"] == "all") & (min_years["min_years_required"] == 1)]["institutions_retained"].iloc[0]) == 2
+    assert int(min_years[(min_years["sector"] == "all") & (min_years["min_years_required"] == 2)]["institutions_retained"].iloc[0]) == 0
     metadata = pd.read_csv(scoped_output_dir / "analysis_metadata_flag_summary.csv")
     flagged = metadata[
         (metadata["scope"] == "overall")
@@ -344,6 +396,90 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert int(flagged) == 1
     metadata_codes = pd.read_csv(scoped_output_dir / "analysis_metadata_code_summary.csv")
     assert "LOCK_SFA" in set(metadata_codes["varname"])
+    selective_panel = pd.read_parquet(scoped_output_dir / "analysis_panel_selective_admissions_robustness_2009_2023_public_private_nonprofit.parquet")
+    assert selective_panel["UNITID"].tolist() == [1, 2]
+    selectivity_summary = pd.read_csv(scoped_output_dir / "analysis_selectivity_summary.csv")
+    assert {"highly_selective", "moderately_selective"} <= set(selectivity_summary["selectivity_category"])
+    assert summary["selective_admissions_robustness_rows"] == 2
+    assert {
+        "panel_balance_by_institution",
+        "panel_balance_summary",
+        "entry_exit_by_sector_year",
+        "entry_exit_reason_audit",
+        "institution_years_by_sector_year",
+        "min_years_sensitivity",
+        "selectivity_summary",
+    } <= set(summary["artifacts"])
+
+
+def test_entry_exit_reason_audit_classifies_sample_transitions(tmp_path: Path) -> None:
+    template = panel_rows()[1]
+
+    def row(unitid: int, year: int, pset4flg: int, sector: int) -> dict:
+        control = 3 if sector == 3 else sector
+        return {
+            **template,
+            "UNITID": unitid,
+            "year": year,
+            "PSET4FLG": pset4flg,
+            "SECTOR": sector,
+            "CONTROL": control,
+        }
+
+    rows = [
+        row(101, 2009, 2, 1),
+        row(101, 2010, 1, 1),
+        row(102, 2009, 1, 3),
+        row(102, 2010, 1, 1),
+        row(103, 2009, 2, 3),
+        row(103, 2010, 1, 2),
+        row(104, 2010, 1, 1),
+        row(201, 2009, 1, 1),
+        row(201, 2010, 2, 1),
+        row(202, 2009, 1, 1),
+        row(202, 2010, 1, 3),
+        row(203, 2009, 1, 2),
+        row(203, 2010, 2, 3),
+        row(204, 2009, 1, 1),
+        row(301, 2009, 1, 1),
+        row(301, 2010, 1, 1),
+    ]
+    panel_path = tmp_path / "panel.parquet"
+    dictionary_path = tmp_path / "dictionary.parquet"
+    output_dir = tmp_path / "outputs"
+    write_parquet(panel_path, rows)
+    write_parquet(dictionary_path, dictionary_rows())
+
+    prepare_analysis_panel(
+        input_panel=panel_path,
+        dictionary=dictionary_path,
+        output_dir=output_dir,
+        variable_config=VARIABLE_CONFIG,
+        years_spec="2009:2010",
+    )
+
+    audit = pd.read_csv(output_dir / "public_private_nonprofit" / "analysis_entry_exit_reason_audit.csv")
+    reasons = {
+        (row["event_type"], int(row["UNITID"])): row["reason_category"]
+        for row in audit.to_dict("records")
+    }
+    assert reasons == {
+        ("entry", 101): "pset4flg_transition",
+        ("entry", 102): "sector_transition",
+        ("entry", 103): "pset4flg_and_sector_transition",
+        ("entry", 104): "full_panel_first_appearance",
+        ("exit", 201): "pset4flg_transition",
+        ("exit", 202): "sector_transition",
+        ("exit", 203): "pset4flg_and_sector_transition",
+        ("exit", 204): "full_panel_disappearance",
+    }
+    both = audit[(audit["event_type"] == "entry") & (audit["UNITID"] == 103)].iloc[0]
+    assert bool(both["pset4flg_transition"]) is True
+    assert bool(both["sector_transition"]) is True
+    first = audit[(audit["event_type"] == "entry") & (audit["UNITID"] == 104)].iloc[0]
+    assert bool(first["full_panel_first_appearance"]) is True
+    disappeared = audit[(audit["event_type"] == "exit") & (audit["UNITID"] == 204)].iloc[0]
+    assert bool(disappeared["full_panel_disappearance"]) is True
 
 
 def test_prepare_analysis_outputs_writes_baseline_and_sector_splits(tmp_path: Path) -> None:

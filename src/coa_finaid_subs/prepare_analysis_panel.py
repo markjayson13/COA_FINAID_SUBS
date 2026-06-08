@@ -20,6 +20,11 @@ DEFAULT_MAIN_SECTORS_SPEC = "1,2"
 DEFAULT_SECTOR_OUTPUT_SPECS = (DEFAULT_MAIN_SECTORS_SPEC, "1", "2")
 FORPROFIT_DIAGNOSTIC_SECTORS_SPEC = "3"
 KEY_VARS = ("year", "UNITID")
+SECTOR_LABELS = {
+    1: "public",
+    2: "private_nonprofit",
+    3: "private_forprofit",
+}
 CLASSIFICATION_VARS = (
     "PSET4FLG",
     "PSEFLAG",
@@ -535,6 +540,95 @@ def add_ratio(out: pd.DataFrame, derived: dict[str, pd.Series], name: str, numer
         derived[name] = safe_divide(out[numerator], out[denominator])
 
 
+def zscore_within_year(df: pd.DataFrame, series: pd.Series, mask: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(series, errors="coerce")
+    result = pd.Series(pd.NA, index=df.index, dtype="Float64")
+    work = pd.DataFrame({"year": df["year"], "value": numeric, "eligible": mask.fillna(False).astype(bool)}, index=df.index)
+    for _, group in work[work["eligible"] & work["value"].notna()].groupby("year", dropna=False):
+        if len(group) < 2:
+            continue
+        std = group["value"].std(ddof=0)
+        if pd.isna(std) or std == 0:
+            continue
+        result.loc[group.index] = (group["value"] - group["value"].mean()) / std
+    return result
+
+
+def add_selectivity_constructs(out: pd.DataFrame) -> pd.DataFrame:
+    if "OPENADMP" not in out.columns:
+        return out
+
+    result = out.copy()
+    openadmp = pd.to_numeric(result["OPENADMP"], errors="coerce")
+    applicants = pd.to_numeric(result["APPLCN"], errors="coerce") if "APPLCN" in result.columns else pd.Series(pd.NA, index=result.index)
+    admissions = pd.to_numeric(result["ADMSSN"], errors="coerce") if "ADMSSN" in result.columns else pd.Series(pd.NA, index=result.index)
+    enrolled = pd.to_numeric(result["ENRLT"], errors="coerce") if "ENRLT" in result.columns else pd.Series(pd.NA, index=result.index)
+
+    open_admissions = openadmp.eq(1)
+    selective_admissions = openadmp.eq(2)
+    valid_admit_rate = selective_admissions & applicants.gt(0) & admissions.ge(0) & admissions.le(applicants)
+    valid_yield = selective_admissions & admissions.gt(0) & enrolled.ge(0) & enrolled.le(admissions)
+    result["OPEN_ADMISSIONS_FLAG"] = open_admissions
+    result["SELECTIVE_ADMISSIONS_FLAG"] = selective_admissions
+    result["VALID_ADMIT_RATE_FLAG"] = valid_admit_rate
+    result["VALID_YIELD_RATE_FLAG"] = valid_yield
+
+    sat_available = pd.Series(False, index=result.index)
+    if "SAT_TOTAL_MIDPOINT" in result.columns:
+        sat = pd.to_numeric(result["SAT_TOTAL_MIDPOINT"], errors="coerce")
+        sat_available = sat.between(400, 1600, inclusive="both")
+    act_available = pd.Series(False, index=result.index)
+    if "ACT_COMPOSITE_MIDPOINT" in result.columns:
+        act = pd.to_numeric(result["ACT_COMPOSITE_MIDPOINT"], errors="coerce")
+        act_available = act.between(1, 36, inclusive="both")
+
+    score_share_parts: list[pd.Series] = []
+    for col in ("SATPCT", "ACTPCT"):
+        if col in result.columns:
+            share = pd.to_numeric(result[col], errors="coerce")
+            score_share_parts.append(share.where(share.between(0, 100, inclusive="both")))
+    if score_share_parts:
+        result["TEST_SCORE_REPORTING_SHARE"] = pd.concat(score_share_parts, axis=1).max(axis=1)
+    else:
+        result["TEST_SCORE_REPORTING_SHARE"] = pd.Series(pd.NA, index=result.index, dtype="Float64")
+
+    test_score_available = selective_admissions & (sat_available | act_available)
+    selectivity_sample = valid_admit_rate & test_score_available
+    result["TEST_SCORE_AVAILABLE_FLAG"] = test_score_available
+    result["SELECTIVE_ADMISSIONS_ROBUSTNESS_SAMPLE"] = selectivity_sample
+
+    result["SELECTIVITY_ADMIT_RATE_Z"] = -zscore_within_year(result, result["ADMIT_RATE"], selectivity_sample)
+    if "SAT_TOTAL_MIDPOINT" in result.columns:
+        result["SELECTIVITY_SAT_Z"] = zscore_within_year(result, result["SAT_TOTAL_MIDPOINT"], selectivity_sample & sat_available)
+    else:
+        result["SELECTIVITY_SAT_Z"] = pd.Series(pd.NA, index=result.index, dtype="Float64")
+    if "ACT_COMPOSITE_MIDPOINT" in result.columns:
+        result["SELECTIVITY_ACT_Z"] = zscore_within_year(result, result["ACT_COMPOSITE_MIDPOINT"], selectivity_sample & act_available)
+    else:
+        result["SELECTIVITY_ACT_Z"] = pd.Series(pd.NA, index=result.index, dtype="Float64")
+    result["SELECTIVITY_TEST_SCORE_Z"] = result[["SELECTIVITY_SAT_Z", "SELECTIVITY_ACT_Z"]].mean(axis=1, skipna=True)
+    result.loc[~selectivity_sample, "SELECTIVITY_TEST_SCORE_Z"] = pd.NA
+    result["SELECTIVITY_INDEX"] = result[["SELECTIVITY_ADMIT_RATE_Z", "SELECTIVITY_TEST_SCORE_Z"]].mean(axis=1, skipna=False)
+
+    result["SELECTIVITY_PERCENTILE_WITHIN_YEAR"] = pd.Series(pd.NA, index=result.index, dtype="Float64")
+    for _, group in result[result["SELECTIVITY_INDEX"].notna()].groupby("year", dropna=False):
+        if group.empty:
+            continue
+        result.loc[group.index, "SELECTIVITY_PERCENTILE_WITHIN_YEAR"] = group["SELECTIVITY_INDEX"].rank(pct=True, method="average")
+
+    category = pd.Series("admissions_policy_unknown", index=result.index, dtype="object")
+    category.loc[open_admissions] = "open_admission"
+    category.loc[selective_admissions & ~selectivity_sample] = "selective_admissions_index_missing"
+    category.loc[selective_admissions & selectivity_sample & result["SELECTIVITY_INDEX"].isna()] = "selective_admissions_index_missing"
+    pct = pd.to_numeric(result["SELECTIVITY_PERCENTILE_WITHIN_YEAR"], errors="coerce")
+    category.loc[selectivity_sample & pct.le(0.25)] = "less_selective"
+    category.loc[selectivity_sample & pct.gt(0.25) & pct.le(0.50)] = "moderately_selective"
+    category.loc[selectivity_sample & pct.gt(0.50) & pct.le(0.75)] = "selective"
+    category.loc[selectivity_sample & pct.gt(0.75)] = "highly_selective"
+    result["SELECTIVITY_CATEGORY"] = category
+    return result
+
+
 def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     numeric_inputs = CORE_MONEY_VARS + NET_PRICE_VARS + FINANCE_MONEY_VARS + COUNT_PERCENT_VARS + METADATA_STATUS_VARS
@@ -643,7 +737,7 @@ def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
 
     if derived:
         out = pd.concat([out, pd.DataFrame(derived, index=out.index)], axis=1)
-    return out
+    return add_selectivity_constructs(out)
 
 
 def validate_panel_keys(df: pd.DataFrame) -> None:
@@ -693,6 +787,479 @@ def sample_counts(df: pd.DataFrame, year_filtered: pd.DataFrame, analysis: pd.Da
         },
     ]
     return pd.DataFrame(rows)
+
+
+def sector_name(value: object) -> str:
+    if pd.isna(value):
+        return "missing"
+    try:
+        return SECTOR_LABELS.get(int(value), f"sector_{int(value)}")
+    except (TypeError, ValueError):
+        return f"sector_{value}"
+
+
+def first_nonnull_value(values: pd.Series) -> object:
+    nonnull = values.dropna()
+    return pd.NA if nonnull.empty else nonnull.iloc[0]
+
+
+def last_nonnull_value(values: pd.Series) -> object:
+    nonnull = values.dropna()
+    return pd.NA if nonnull.empty else nonnull.iloc[-1]
+
+
+def pipe_join_ints(values: Iterable[object]) -> str:
+    cleaned: list[str] = []
+    for value in values:
+        if pd.isna(value):
+            continue
+        try:
+            cleaned.append(str(int(value)))
+        except (TypeError, ValueError):
+            cleaned.append(str(value))
+    return "|".join(cleaned)
+
+
+def normalized_value(value: object) -> object:
+    if pd.isna(value):
+        return pd.NA
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def value_changed(left: object, right: object) -> bool:
+    if pd.isna(left) and pd.isna(right):
+        return False
+    if pd.isna(left) or pd.isna(right):
+        return True
+    return bool(left != right)
+
+
+def event_row_at_year(df: pd.DataFrame, unitid: object, year: int) -> dict[str, object]:
+    row = df[(df["UNITID"] == unitid) & (df["year"] == year)].iloc[0]
+    return row.to_dict()
+
+
+def classify_transition_reason(
+    event_type: str,
+    sample_row: dict[str, object],
+    comparison_row: dict[str, object] | None,
+) -> dict[str, object]:
+    if comparison_row is None:
+        if event_type == "entry":
+            reason = "full_panel_first_appearance"
+            return {
+                "reason_category": reason,
+                "full_panel_first_appearance": True,
+                "full_panel_disappearance": False,
+                "pset4flg_transition": False,
+                "sector_transition": False,
+            }
+        reason = "full_panel_disappearance"
+        return {
+            "reason_category": reason,
+            "full_panel_first_appearance": False,
+            "full_panel_disappearance": True,
+            "pset4flg_transition": False,
+            "sector_transition": False,
+        }
+
+    sample_pset = normalized_value(sample_row.get("PSET4FLG"))
+    sample_sector = normalized_value(sample_row.get("SECTOR"))
+    comparison_pset = normalized_value(comparison_row.get("PSET4FLG"))
+    comparison_sector = normalized_value(comparison_row.get("SECTOR"))
+    pset_changed = value_changed(sample_pset, comparison_pset)
+    sector_changed = value_changed(sample_sector, comparison_sector)
+    if pset_changed and sector_changed:
+        reason = "pset4flg_and_sector_transition"
+    elif pset_changed:
+        reason = "pset4flg_transition"
+    elif sector_changed:
+        reason = "sector_transition"
+    else:
+        reason = "full_panel_gap_or_other"
+    return {
+        "reason_category": reason,
+        "full_panel_first_appearance": False,
+        "full_panel_disappearance": False,
+        "pset4flg_transition": pset_changed,
+        "sector_transition": sector_changed,
+    }
+
+
+def build_panel_balance_by_institution(df: pd.DataFrame, years: list[int]) -> pd.DataFrame:
+    columns = [
+        "UNITID",
+        "INSTNM",
+        "OPEID",
+        "first_year",
+        "last_year",
+        "years_observed",
+        "possible_years",
+        "observation_share",
+        "balanced_full_window",
+        "first_observed_after_start",
+        "last_observed_before_end",
+        "missing_years",
+        "missing_year_count",
+        "observed_years",
+        "sector_first",
+        "sector_last",
+        "sector_label_first",
+        "sector_label_last",
+        "sector_changed",
+    ]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    start_year = min(years)
+    end_year = max(years)
+    possible_years = len(years)
+    expected_years = set(years)
+    work = df.sort_values(["UNITID", "year"]).copy()
+    rows: list[dict[str, object]] = []
+
+    for unitid, group in work.groupby("UNITID", dropna=False, sort=True):
+        observed = sorted(int(year) for year in pd.to_numeric(group["year"], errors="coerce").dropna().unique())
+        observed_set = set(observed)
+        missing = sorted(expected_years - observed_set)
+        sector_values = pd.to_numeric(group["SECTOR"], errors="coerce") if "SECTOR" in group.columns else pd.Series(dtype="Float64")
+        sector_first = first_nonnull_value(sector_values)
+        sector_last = last_nonnull_value(sector_values)
+        sector_unique = sector_values.dropna().astype(int).nunique() if not sector_values.empty else 0
+        row = {
+            "UNITID": unitid,
+            "INSTNM": first_nonnull_value(group["INSTNM"]) if "INSTNM" in group.columns else "",
+            "OPEID": first_nonnull_value(group["OPEID"]) if "OPEID" in group.columns else "",
+            "first_year": observed[0] if observed else pd.NA,
+            "last_year": observed[-1] if observed else pd.NA,
+            "years_observed": len(observed),
+            "possible_years": possible_years,
+            "observation_share": len(observed) / possible_years if possible_years else pd.NA,
+            "balanced_full_window": len(observed) == possible_years,
+            "first_observed_after_start": bool(observed and observed[0] > start_year),
+            "last_observed_before_end": bool(observed and observed[-1] < end_year),
+            "missing_years": pipe_join_ints(missing),
+            "missing_year_count": len(missing),
+            "observed_years": pipe_join_ints(observed),
+            "sector_first": sector_first,
+            "sector_last": sector_last,
+            "sector_label_first": sector_name(sector_first),
+            "sector_label_last": sector_name(sector_last),
+            "sector_changed": bool(sector_unique > 1),
+        }
+        rows.append(row)
+    return pd.DataFrame(rows, columns=columns)
+
+
+def entry_exit_reason_audit(full_panel: pd.DataFrame, analysis: pd.DataFrame, years: list[int]) -> pd.DataFrame:
+    columns = [
+        "UNITID",
+        "INSTNM",
+        "OPEID",
+        "event_type",
+        "event_year",
+        "reason_category",
+        "full_panel_first_appearance",
+        "full_panel_disappearance",
+        "pset4flg_transition",
+        "sector_transition",
+        "comparison_basis",
+        "comparison_year",
+        "sample_first_year",
+        "sample_last_year",
+        "sample_years_observed",
+        "full_panel_first_year",
+        "full_panel_last_year",
+        "full_panel_years_observed",
+        "sample_event_pset4flg",
+        "comparison_pset4flg",
+        "sample_event_sector",
+        "comparison_sector",
+        "sample_event_sector_label",
+        "comparison_sector_label",
+        "sample_event_control",
+        "comparison_control",
+        "sample_event_iclevel",
+        "comparison_iclevel",
+        "sample_event_hloffer",
+        "comparison_hloffer",
+        "sample_event_deggrant",
+        "comparison_deggrant",
+        "sample_event_ugoffer",
+        "comparison_ugoffer",
+    ]
+    if analysis.empty:
+        return pd.DataFrame(columns=columns)
+
+    start_year = min(years)
+    end_year = max(years)
+    full_work = full_panel.sort_values(["UNITID", "year"]).copy()
+    sample_balance = build_panel_balance_by_institution(analysis, years)
+    rows: list[dict[str, object]] = []
+
+    def add_event(unit_balance: pd.Series, event_type: str) -> None:
+        unitid = unit_balance["UNITID"]
+        event_year = int(unit_balance["first_year"] if event_type == "entry" else unit_balance["last_year"])
+        unit_full = full_work[full_work["UNITID"] == unitid]
+        full_years = sorted(int(year) for year in pd.to_numeric(unit_full["year"], errors="coerce").dropna().unique())
+        if event_type == "entry":
+            comparison = unit_full[unit_full["year"] < event_year].tail(1)
+            comparison_basis = "nearest_prior_full_panel_row"
+        else:
+            comparison = unit_full[unit_full["year"] > event_year].head(1)
+            comparison_basis = "nearest_next_full_panel_row"
+        comparison_row = None if comparison.empty else comparison.iloc[0].to_dict()
+        if comparison_row is None:
+            comparison_basis = "no_prior_full_panel_row" if event_type == "entry" else "no_later_full_panel_row"
+        sample_row = event_row_at_year(analysis, unitid, event_year)
+        reason = classify_transition_reason(event_type, sample_row, comparison_row)
+
+        row = {
+            "UNITID": unitid,
+            "INSTNM": sample_row.get("INSTNM", ""),
+            "OPEID": sample_row.get("OPEID", ""),
+            "event_type": event_type,
+            "event_year": event_year,
+            "comparison_basis": comparison_basis,
+            "comparison_year": normalized_value(comparison_row.get("year")) if comparison_row else pd.NA,
+            "sample_first_year": normalized_value(unit_balance["first_year"]),
+            "sample_last_year": normalized_value(unit_balance["last_year"]),
+            "sample_years_observed": normalized_value(unit_balance["years_observed"]),
+            "full_panel_first_year": min(full_years) if full_years else pd.NA,
+            "full_panel_last_year": max(full_years) if full_years else pd.NA,
+            "full_panel_years_observed": len(full_years),
+            "sample_event_pset4flg": normalized_value(sample_row.get("PSET4FLG")),
+            "comparison_pset4flg": normalized_value(comparison_row.get("PSET4FLG")) if comparison_row else pd.NA,
+            "sample_event_sector": normalized_value(sample_row.get("SECTOR")),
+            "comparison_sector": normalized_value(comparison_row.get("SECTOR")) if comparison_row else pd.NA,
+            "sample_event_sector_label": sector_name(sample_row.get("SECTOR")),
+            "comparison_sector_label": sector_name(comparison_row.get("SECTOR")) if comparison_row else "",
+            "sample_event_control": normalized_value(sample_row.get("CONTROL")),
+            "comparison_control": normalized_value(comparison_row.get("CONTROL")) if comparison_row else pd.NA,
+            "sample_event_iclevel": normalized_value(sample_row.get("ICLEVEL")),
+            "comparison_iclevel": normalized_value(comparison_row.get("ICLEVEL")) if comparison_row else pd.NA,
+            "sample_event_hloffer": normalized_value(sample_row.get("HLOFFER")),
+            "comparison_hloffer": normalized_value(comparison_row.get("HLOFFER")) if comparison_row else pd.NA,
+            "sample_event_deggrant": normalized_value(sample_row.get("DEGGRANT")),
+            "comparison_deggrant": normalized_value(comparison_row.get("DEGGRANT")) if comparison_row else pd.NA,
+            "sample_event_ugoffer": normalized_value(sample_row.get("UGOFFER")),
+            "comparison_ugoffer": normalized_value(comparison_row.get("UGOFFER")) if comparison_row else pd.NA,
+        }
+        row.update(reason)
+        rows.append(row)
+
+    for _, unit_balance in sample_balance.sort_values(["UNITID"]).iterrows():
+        first_year = int(unit_balance["first_year"])
+        last_year = int(unit_balance["last_year"])
+        if first_year > start_year:
+            add_event(unit_balance, "entry")
+        if last_year < end_year:
+            add_event(unit_balance, "exit")
+
+    return pd.DataFrame(rows, columns=columns).sort_values(["event_year", "event_type", "UNITID"]).reset_index(drop=True)
+
+
+def balance_summary(balance: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "scope",
+        "sector",
+        "institutions",
+        "balanced_institutions",
+        "balanced_share",
+        "mean_years_observed",
+        "median_years_observed",
+        "min_years_observed",
+        "max_years_observed",
+        "first_observed_after_start",
+        "last_observed_before_end",
+        "observed_both_after_start_and_before_end",
+        "sector_changed",
+    ]
+    if balance.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, object]] = []
+
+    def add_row(scope: str, sector: str, group: pd.DataFrame) -> None:
+        institutions = int(len(group))
+        balanced = int(group["balanced_full_window"].fillna(False).astype(bool).sum())
+        first_after_start = group["first_observed_after_start"].fillna(False).astype(bool)
+        last_before_end = group["last_observed_before_end"].fillna(False).astype(bool)
+        rows.append(
+            {
+                "scope": scope,
+                "sector": sector,
+                "institutions": institutions,
+                "balanced_institutions": balanced,
+                "balanced_share": balanced / institutions if institutions else 0.0,
+                "mean_years_observed": float(group["years_observed"].mean()) if institutions else 0.0,
+                "median_years_observed": float(group["years_observed"].median()) if institutions else 0.0,
+                "min_years_observed": int(group["years_observed"].min()) if institutions else 0,
+                "max_years_observed": int(group["years_observed"].max()) if institutions else 0,
+                "first_observed_after_start": int(first_after_start.sum()),
+                "last_observed_before_end": int(last_before_end.sum()),
+                "observed_both_after_start_and_before_end": int((first_after_start & last_before_end).sum()),
+                "sector_changed": int(group["sector_changed"].fillna(False).astype(bool).sum()),
+            }
+        )
+
+    add_row("overall", "all", balance)
+    for sector, group in balance.groupby("sector_label_first", dropna=False, sort=True):
+        add_row("sector", str(sector), group)
+    return pd.DataFrame(rows, columns=columns)
+
+
+def entry_exit_by_sector_year(balance: pd.DataFrame, years: list[int]) -> pd.DataFrame:
+    columns = [
+        "year",
+        "sector",
+        "first_observed_in_window",
+        "first_observed_after_window_start",
+        "last_observed_in_window",
+        "last_observed_before_window_end",
+    ]
+    if balance.empty:
+        return pd.DataFrame(columns=columns)
+
+    start_year = min(years)
+    end_year = max(years)
+    sectors = ["all"] + sorted(str(sector) for sector in balance["sector_label_first"].dropna().unique())
+    rows: list[dict[str, object]] = []
+    for sector in sectors:
+        group = balance if sector == "all" else balance[balance["sector_label_first"] == sector]
+        for year in years:
+            first_count = int((group["first_year"] == year).sum())
+            last_count = int((group["last_year"] == year).sum())
+            rows.append(
+                {
+                    "year": year,
+                    "sector": sector,
+                    "first_observed_in_window": first_count,
+                    "first_observed_after_window_start": first_count if year > start_year else 0,
+                    "last_observed_in_window": last_count,
+                    "last_observed_before_window_end": last_count if year < end_year else 0,
+                }
+            )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def institution_years_by_sector_year(df: pd.DataFrame, years: list[int]) -> pd.DataFrame:
+    columns = ["year", "sector", "institution_years", "institutions"]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    work = df.copy()
+    work["SECTOR"] = pd.to_numeric(work["SECTOR"], errors="coerce")
+    grouped = (
+        work.groupby(["year", "SECTOR"], dropna=False)
+        .agg(institution_years=("UNITID", "size"), institutions=("UNITID", "nunique"))
+        .reset_index()
+    )
+    grouped["sector"] = grouped["SECTOR"].map(sector_name)
+    grouped = grouped[["year", "sector", "institution_years", "institutions"]]
+
+    all_rows = (
+        work.groupby("year", dropna=False)
+        .agg(institution_years=("UNITID", "size"), institutions=("UNITID", "nunique"))
+        .reset_index()
+    )
+    all_rows["sector"] = "all"
+    all_rows = all_rows[["year", "sector", "institution_years", "institutions"]]
+
+    out = pd.concat([all_rows, grouped], ignore_index=True)
+    sectors = ["all"] + sorted(sector for sector in out["sector"].unique() if sector != "all")
+    complete_index = pd.MultiIndex.from_product([years, sectors], names=["year", "sector"])
+    out = out.set_index(["year", "sector"]).reindex(complete_index, fill_value=0).reset_index()
+    return out[columns].sort_values(["sector", "year"]).reset_index(drop=True)
+
+
+def minimum_years_sensitivity(balance: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "sector",
+        "min_years_required",
+        "institutions_retained",
+        "institution_share_retained",
+        "institution_years_retained",
+        "institution_year_share_retained",
+    ]
+    if balance.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, object]] = []
+    max_years = int(balance["possible_years"].max())
+
+    def add_rows(sector: str, group: pd.DataFrame) -> None:
+        total_institutions = len(group)
+        total_institution_years = int(group["years_observed"].sum())
+        for threshold in range(1, max_years + 1):
+            retained = group[group["years_observed"] >= threshold]
+            retained_institutions = int(len(retained))
+            retained_years = int(retained["years_observed"].sum())
+            rows.append(
+                {
+                    "sector": sector,
+                    "min_years_required": threshold,
+                    "institutions_retained": retained_institutions,
+                    "institution_share_retained": retained_institutions / total_institutions if total_institutions else 0.0,
+                    "institution_years_retained": retained_years,
+                    "institution_year_share_retained": retained_years / total_institution_years if total_institution_years else 0.0,
+                }
+            )
+
+    add_rows("all", balance)
+    for sector, group in balance.groupby("sector_label_first", dropna=False, sort=True):
+        add_rows(str(sector), group)
+    return pd.DataFrame(rows, columns=columns)
+
+
+def selectivity_summary(df: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "year",
+        "sector",
+        "selectivity_category",
+        "rows",
+        "unitids",
+        "mean_admit_rate",
+        "median_admit_rate",
+        "mean_sat_total_midpoint",
+        "mean_act_composite_midpoint",
+        "mean_selectivity_index",
+    ]
+    if df.empty or "SELECTIVITY_CATEGORY" not in df.columns:
+        return pd.DataFrame(columns=columns)
+
+    work = df.copy()
+    work["sector"] = work["SECTOR"].map(sector_name) if "SECTOR" in work.columns else "all"
+    rows: list[dict[str, object]] = []
+
+    def add_rows(scope_sector: str, group: pd.DataFrame) -> None:
+        for (year, category), sub in group.groupby(["year", "SELECTIVITY_CATEGORY"], dropna=False, sort=True):
+            admit = pd.to_numeric(sub["ADMIT_RATE"], errors="coerce") if "ADMIT_RATE" in sub.columns else pd.Series(dtype="Float64")
+            sat = pd.to_numeric(sub["SAT_TOTAL_MIDPOINT"], errors="coerce") if "SAT_TOTAL_MIDPOINT" in sub.columns else pd.Series(dtype="Float64")
+            act = pd.to_numeric(sub["ACT_COMPOSITE_MIDPOINT"], errors="coerce") if "ACT_COMPOSITE_MIDPOINT" in sub.columns else pd.Series(dtype="Float64")
+            index = pd.to_numeric(sub["SELECTIVITY_INDEX"], errors="coerce") if "SELECTIVITY_INDEX" in sub.columns else pd.Series(dtype="Float64")
+            rows.append(
+                {
+                    "year": year,
+                    "sector": scope_sector,
+                    "selectivity_category": category,
+                    "rows": int(len(sub)),
+                    "unitids": int(sub["UNITID"].nunique(dropna=True)) if "UNITID" in sub.columns else 0,
+                    "mean_admit_rate": None if admit.dropna().empty else float(admit.mean()),
+                    "median_admit_rate": None if admit.dropna().empty else float(admit.median()),
+                    "mean_sat_total_midpoint": None if sat.dropna().empty else float(sat.mean()),
+                    "mean_act_composite_midpoint": None if act.dropna().empty else float(act.mean()),
+                    "mean_selectivity_index": None if index.dropna().empty else float(index.mean()),
+                }
+            )
+
+    add_rows("all", work)
+    for sector, group in work.groupby("sector", dropna=False, sort=True):
+        add_rows(str(sector), group)
+    return pd.DataFrame(rows, columns=columns)
 
 
 def missingness_by_year(df: pd.DataFrame) -> pd.DataFrame:
@@ -842,6 +1409,25 @@ def derived_manifest_rows() -> pd.DataFrame:
         },
         {"varname": "ADMIT_RATE", "group": "derived_admissions", "role": "admissions divided by applicants", "required": False},
         {"varname": "YIELD_RATE", "group": "derived_admissions", "role": "enrolled divided by admissions", "required": False},
+        {"varname": "OPEN_ADMISSIONS_FLAG", "group": "derived_admissions", "role": "OPENADMP indicates an open-admissions policy", "required": False},
+        {
+            "varname": "SELECTIVE_ADMISSIONS_FLAG",
+            "group": "derived_admissions",
+            "role": "OPENADMP indicates the institution does not have open admissions",
+            "required": False,
+        },
+        {
+            "varname": "VALID_ADMIT_RATE_FLAG",
+            "group": "derived_admissions_quality",
+            "role": "applicant and admission counts form a valid admit rate",
+            "required": False,
+        },
+        {
+            "varname": "VALID_YIELD_RATE_FLAG",
+            "group": "derived_admissions_quality",
+            "role": "admission and enrolled counts form a valid yield rate",
+            "required": False,
+        },
         {
             "varname": "SAT_TOTAL_MIDPOINT",
             "group": "derived_admissions",
@@ -852,6 +1438,66 @@ def derived_manifest_rows() -> pd.DataFrame:
             "varname": "ACT_COMPOSITE_MIDPOINT",
             "group": "derived_admissions",
             "role": "ACT composite midpoint from 25th and 75th percentiles",
+            "required": False,
+        },
+        {
+            "varname": "TEST_SCORE_REPORTING_SHARE",
+            "group": "derived_selectivity",
+            "role": "larger of SATPCT and ACTPCT where reported",
+            "required": False,
+        },
+        {
+            "varname": "TEST_SCORE_AVAILABLE_FLAG",
+            "group": "derived_selectivity",
+            "role": "selective-admissions row has a usable SAT or ACT midpoint",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVE_ADMISSIONS_ROBUSTNESS_SAMPLE",
+            "group": "derived_selectivity",
+            "role": "non-open-admissions row with valid admit rate and usable test-score midpoint",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_ADMIT_RATE_Z",
+            "group": "derived_selectivity",
+            "role": "within-year standardized negative admit-rate component; higher means more selective",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_SAT_Z",
+            "group": "derived_selectivity",
+            "role": "within-year standardized SAT midpoint component",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_ACT_Z",
+            "group": "derived_selectivity",
+            "role": "within-year standardized ACT midpoint component",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_TEST_SCORE_Z",
+            "group": "derived_selectivity",
+            "role": "mean of available SAT and ACT within-year standardized test-score components",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_INDEX",
+            "group": "derived_selectivity",
+            "role": "mean of admit-rate and test-score selectivity components in the robustness sample",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_PERCENTILE_WITHIN_YEAR",
+            "group": "derived_selectivity",
+            "role": "percentile rank of the selectivity index within year and output scope",
+            "required": False,
+        },
+        {
+            "varname": "SELECTIVITY_CATEGORY",
+            "group": "derived_selectivity",
+            "role": "open-admission, missing-index, or within-year selectivity category",
             "required": False,
         },
         {
@@ -1037,8 +1683,16 @@ def prepare_analysis_panel(
 
     year_label = f"{min(years)}_{max(years)}" if years else "all_years"
     analysis_path = output_dir / f"analysis_panel_coa_headroom_{year_label}_{sector_label}.parquet"
+    selective_admissions_path = output_dir / f"analysis_panel_selective_admissions_robustness_{year_label}_{sector_label}.parquet"
     manifest_path = output_dir / "analysis_variable_manifest.csv"
     sample_counts_path = output_dir / "analysis_sample_counts.csv"
+    panel_balance_path = output_dir / "analysis_panel_balance_by_institution.csv"
+    panel_balance_summary_path = output_dir / "analysis_panel_balance_summary.csv"
+    entry_exit_path = output_dir / "analysis_entry_exit_by_sector_year.csv"
+    entry_exit_reason_path = output_dir / "analysis_entry_exit_reason_audit.csv"
+    sector_year_path = output_dir / "analysis_institution_years_by_sector_year.csv"
+    min_years_path = output_dir / "analysis_min_years_sensitivity.csv"
+    selectivity_summary_path = output_dir / "analysis_selectivity_summary.csv"
     missingness_path = output_dir / "analysis_missingness_by_year.csv"
     value_sanity_path = output_dir / "analysis_value_sanity.csv"
     metadata_summary_path = output_dir / "analysis_metadata_flag_summary.csv"
@@ -1046,9 +1700,19 @@ def prepare_analysis_panel(
     summary_path = output_dir / "analysis_build_summary.json"
 
     analysis.to_parquet(analysis_path, index=False)
+    selective_admissions = analysis[analysis["SELECTIVE_ADMISSIONS_ROBUSTNESS_SAMPLE"].fillna(False).astype(bool)].copy()
+    selective_admissions.to_parquet(selective_admissions_path, index=False)
     manifest = read_dictionary_manifest(dictionary, specs, set(schema_cols))
     pd.concat([manifest, derived_manifest_rows()], ignore_index=True).to_csv(manifest_path, index=False)
     sample_counts(df, year_filtered, analysis, sector_label).to_csv(sample_counts_path, index=False)
+    panel_balance = build_panel_balance_by_institution(analysis, years)
+    panel_balance.to_csv(panel_balance_path, index=False)
+    balance_summary(panel_balance).to_csv(panel_balance_summary_path, index=False)
+    entry_exit_by_sector_year(panel_balance, years).to_csv(entry_exit_path, index=False)
+    entry_exit_reason_audit(year_filtered, analysis, years).to_csv(entry_exit_reason_path, index=False)
+    institution_years_by_sector_year(analysis, years).to_csv(sector_year_path, index=False)
+    minimum_years_sensitivity(panel_balance).to_csv(min_years_path, index=False)
+    selectivity_summary(analysis).to_csv(selectivity_summary_path, index=False)
     missingness_by_year(analysis).to_csv(missingness_path, index=False)
     value_sanity(analysis).to_csv(value_sanity_path, index=False)
     metadata_flag_summary(analysis).to_csv(metadata_summary_path, index=False)
@@ -1071,6 +1735,8 @@ def prepare_analysis_panel(
         "output_dir": str(output_dir),
         "output_panel": str(analysis_path),
         "output_panel_sha256": sha256_file(analysis_path),
+        "selective_admissions_robustness_panel": str(selective_admissions_path),
+        "selective_admissions_robustness_panel_sha256": sha256_file(selective_admissions_path),
         "years": years,
         "sectors": sectors,
         "sector_scope": sector_label,
@@ -1079,12 +1745,21 @@ def prepare_analysis_panel(
         "year_window_rows": int(len(year_filtered)),
         "analysis_rows": int(len(analysis)),
         "analysis_unitids": int(analysis["UNITID"].nunique(dropna=True)),
+        "selective_admissions_robustness_rows": int(len(selective_admissions)),
+        "selective_admissions_robustness_unitids": int(selective_admissions["UNITID"].nunique(dropna=True)),
         "output_columns": int(len(analysis.columns)),
         "missing_optional_columns": missing_requested,
         "negative_net_price_counts": negative_net_price_counts,
         "artifacts": {
             "variable_manifest": str(manifest_path),
             "sample_counts": str(sample_counts_path),
+            "panel_balance_by_institution": str(panel_balance_path),
+            "panel_balance_summary": str(panel_balance_summary_path),
+            "entry_exit_by_sector_year": str(entry_exit_path),
+            "entry_exit_reason_audit": str(entry_exit_reason_path),
+            "institution_years_by_sector_year": str(sector_year_path),
+            "min_years_sensitivity": str(min_years_path),
+            "selectivity_summary": str(selectivity_summary_path),
             "missingness_by_year": str(missingness_path),
             "value_sanity": str(value_sanity_path),
             "metadata_flag_summary": str(metadata_summary_path),

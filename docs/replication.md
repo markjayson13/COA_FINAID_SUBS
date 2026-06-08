@@ -72,11 +72,15 @@ The default first-stage extract writes:
 
 - a public and private nonprofit four-year Title IV sample for 2009-2023
 - public-only and private nonprofit-only sector files for the same years
+- panel balance, first/last observed year, sector-year count, and minimum-years sensitivity tables
+- a separate selective-admissions robustness panel and selectivity summary
 - derived COA and headroom variables
 - cleaned net-price diagnostics
 - sector-harmonized finance controls
 - IPEDS metadata exposure flags for imputation, revisions, and parent-linked records
 - admissions, location, mission, and student-body controls
 - manifest and audit tables documenting all selected variables
+
+The justification for each sample, variable, and cleaning rule is recorded in `docs/data_decision_register.md`.
 
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 335 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

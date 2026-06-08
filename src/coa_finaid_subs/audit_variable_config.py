@@ -99,6 +99,7 @@ def complete_case_scenarios(sample: pd.DataFrame) -> pd.DataFrame:
             "PSET4FLG",
             "SECTOR",
             "CONTROL",
+            "OPENADMP",
             "CHG2AY0",
             "CHG4AY0",
             "CHG7AY0",
@@ -112,6 +113,7 @@ def complete_case_scenarios(sample: pd.DataFrame) -> pd.DataFrame:
             "PSET4FLG",
             "SECTOR",
             "CONTROL",
+            "OPENADMP",
             "CHG2AY0",
             "CHG4AY0",
             "CHG7AY0",
@@ -134,23 +136,6 @@ def complete_case_scenarios(sample: pd.DataFrame) -> pd.DataFrame:
             "UAGRNTT",
             "UFLOANA",
             "UFLOANT",
-        ],
-        "admissions_selectivity": [
-            "year",
-            "UNITID",
-            "PSET4FLG",
-            "SECTOR",
-            "CONTROL",
-            "OPENADMP",
-            "APPLCN",
-            "ADMSSN",
-            "ENRLT",
-            "SATVR25",
-            "SATVR75",
-            "SATMT25",
-            "SATMT75",
-            "ACTCM25",
-            "ACTCM75",
         ],
         "net_price_private_current_income_bands_npt_raw": [
             "year",
@@ -180,6 +165,49 @@ def complete_case_scenarios(sample: pd.DataFrame) -> pd.DataFrame:
                 "missing_columns": "|".join(missing),
             }
         )
+    selective_base = ["year", "UNITID", "PSET4FLG", "SECTOR", "CONTROL", "OPENADMP", "APPLCN", "ADMSSN", "ENRLT"]
+    selective_base_missing = [col for col in selective_base if col.upper() not in name_map]
+    if selective_base_missing:
+        selective_admit = sample.iloc[0:0]
+        selective_index = sample.iloc[0:0]
+    else:
+        actual = {col: name_map[col.upper()] for col in selective_base}
+        openadmp = pd.to_numeric(sample[actual["OPENADMP"]], errors="coerce")
+        applicants = pd.to_numeric(sample[actual["APPLCN"]], errors="coerce")
+        admissions = pd.to_numeric(sample[actual["ADMSSN"]], errors="coerce")
+        enrolled = pd.to_numeric(sample[actual["ENRLT"]], errors="coerce")
+        selective_mask = openadmp.eq(2)
+        valid_admit = selective_mask & applicants.gt(0) & admissions.ge(0) & admissions.le(applicants)
+        valid_yield = admissions.gt(0) & enrolled.ge(0) & enrolled.le(admissions)
+        selective_admit = sample[valid_admit & valid_yield]
+        sat_cols = ["SATVR25", "SATVR75", "SATMT25", "SATMT75"]
+        act_cols = ["ACTCM25", "ACTCM75"]
+        sat_missing = [col for col in sat_cols if col.upper() not in name_map]
+        act_missing = [col for col in act_cols if col.upper() not in name_map]
+        sat_ok = pd.Series(False, index=sample.index) if sat_missing else sample[[name_map[col.upper()] for col in sat_cols]].notna().all(axis=1)
+        act_ok = pd.Series(False, index=sample.index) if act_missing else sample[[name_map[col.upper()] for col in act_cols]].notna().all(axis=1)
+        selective_index = sample[valid_admit & (sat_ok | act_ok)]
+    rows.append(
+        {
+            "scenario": "selective_admissions_robustness_admit_rate_yield",
+            "rows": int(len(selective_admit)),
+            "unitids": int(selective_admit["UNITID"].nunique(dropna=True)) if "UNITID" in selective_admit else 0,
+            "row_share": len(selective_admit) / len(sample) if len(sample) else 0.0,
+            "missing_columns": "|".join(selective_base_missing),
+        }
+    )
+    index_missing_cols = selective_base_missing + [
+        col for col in ["SATVR25", "SATVR75", "SATMT25", "SATMT75", "ACTCM25", "ACTCM75"] if col.upper() not in name_map
+    ]
+    rows.append(
+        {
+            "scenario": "selective_admissions_robustness_index_inputs",
+            "rows": int(len(selective_index)),
+            "unitids": int(selective_index["UNITID"].nunique(dropna=True)) if "UNITID" in selective_index else 0,
+            "row_share": len(selective_index) / len(sample) if len(sample) else 0.0,
+            "missing_columns": "|".join(index_missing_cols),
+        }
+    )
     finance_required = ["year", "UNITID", "PSET4FLG", "SECTOR", "CONTROL"]
     finance_cols = {
         1: ["F1D01", "F1D02", "F1A06"],

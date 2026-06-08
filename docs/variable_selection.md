@@ -10,6 +10,8 @@ Source notes:
 - NCES IPEDS Handbook of Survey Methods: https://nces.ed.gov/statprog/handbook/pdf/ipeds.pdf
 - IPEDS Student Financial Aid survey material, cost-of-attendance reporting flow: https://nces.ed.gov/ipeds/use-the-data/download-survey-material/2014/student%20financial%20aid/package_7_16.pdf
 
+For the full decision-by-decision source trail, see `docs/data_decision_register.md`.
+
 ## Primary variables
 
 The main sample is four-year Title IV public and private nonprofit institutions from 2009 through 2023:
@@ -51,7 +53,7 @@ Geographic controls include state, region, county, urbanicity, and metro-area fi
 
 Institutional controls include size, Carnegie classification, degree-granting status, graduate offerings, HBCU, Tribal college, land-grant, hospital, and medical-degree indicators.
 
-Admissions controls include open-admissions status, applications, admissions, enrolled students, SAT percentiles, ACT percentiles, and test-submission shares. These fields are not complete enough to be mandatory for the main sample, but they are useful for selectivity checks.
+Admissions controls are split by use. `OPENADMP` is part of the baseline control set. Applications, admissions, enrolled students, SAT percentiles, ACT percentiles, and test-submission shares are reserved for the selective-admissions robustness sample because IPEDS admissions data are collected for institutions without open admissions policies.
 
 Scale controls use the SFA cohort fields because the ordinary enrollment totals in this local clean panel are present in the schema but empty for the analysis sample. The useful fields are `SCUGRAD`, `SCUGFFN`, `SCUGFFP`, `SCFA1N`, and `SCFA2`.
 
@@ -97,7 +99,8 @@ With the local panel verified on June 8, 2026:
 - primary plus FTFT totals and denominator: 26,051 institution-years and 2,247 institutions
 - all-undergraduate aid family: 29,520 institution-years and 2,302 institutions
 - sector-appropriate finance controls: 32,544 institution-years and 2,514 institutions
-- admissions/selectivity complete cases: 16,551 institution-years and 1,510 institutions
+- selective-admissions admit-rate and yield checks: 24,732 institution-years and 1,926 institutions
+- selective-admissions robustness index inputs: 18,813 institution-years and 1,599 institutions
 - private raw `NPT*` net-price income-band complete cases: 12,969 institution-years and 1,209 institutions
 - sector-harmonized current net-price income-band complete cases: 21,304 institution-years and 1,983 institutions
 - any tracked IPEDS metadata exposure: 7,103 institution-years

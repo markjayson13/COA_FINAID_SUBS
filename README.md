@@ -36,7 +36,10 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
 - `scripts/audit_variable_config.py` checks the selected variables against the real panel.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
+- `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
 - `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
+- `docs/selectivity_index.md` documents the open-admissions baseline control and the selective-admissions robustness index.
+- `docs/sample_dynamics.md` records panel balance, entry/exit definitions, sector-year counts, and external NCES context for the institution-count decline.
 - `docs/replication.md` gives the minimum commands needed to rebuild the first extract.
 - `tests/` covers the main data-integrity checks with small synthetic panels.
 
@@ -87,9 +90,17 @@ outputs/analysis_panel/private_nonprofit/
 Each directory contains:
 
 - `analysis_panel_coa_headroom_2009_2023_<scope>.parquet`
+- `analysis_panel_selective_admissions_robustness_2009_2023_<scope>.parquet`
 - `analysis_build_summary.json`
 - `analysis_variable_manifest.csv`
 - `analysis_sample_counts.csv`
+- `analysis_panel_balance_by_institution.csv`
+- `analysis_panel_balance_summary.csv`
+- `analysis_entry_exit_by_sector_year.csv`
+- `analysis_entry_exit_reason_audit.csv`
+- `analysis_institution_years_by_sector_year.csv`
+- `analysis_min_years_sensitivity.csv`
+- `analysis_selectivity_summary.csv`
 - `analysis_missingness_by_year.csv`
 - `analysis_value_sanity.csv`
 - `analysis_metadata_flag_summary.csv`

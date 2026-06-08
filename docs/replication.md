@@ -1,6 +1,8 @@
-# Replication Notes
+# Replication notes
 
-The analysis code expects a local build of the IPEDS panel produced by `markjayson13/IPEDSDB_Panel`.
+These notes are for readers who want to rebuild the first analysis extract from the clean IPEDS panel. The code expects a local build of the panel produced by [`markjayson13/IPEDSDB_Panel`](https://github.com/markjayson13/IPEDSDB_Panel).
+
+The generated analysis files are intentionally left out of Git. Rebuilding them locally is part of the replication trail.
 
 ## Minimal run
 
@@ -22,12 +24,11 @@ python scripts/prepare_analysis_panel.py \
 
 ## Expected first-stage outputs
 
-The default first-stage extract should produce:
+The default first-stage extract writes:
 
 - a four-year Title IV sample for 2009-2023
 - derived COA and headroom variables
 - cleaned net-price diagnostics
 - manifest and audit tables documenting all selected variables
 
-The exact row count depends on the upstream panel file hash. With the current local input verified on June 8, 2026, the expected primary sample was 43,476 institution-years and 3,769 institutions.
-
+The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the primary sample contained 43,476 institution-years and 3,769 institutions.

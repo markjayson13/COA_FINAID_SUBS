@@ -1,15 +1,17 @@
-# Data Protocol
+# Data protocol
 
-This repository uses `IPEDSDB_Panel` as the upstream data-construction source. It does not rebuild IPEDS Access databases and does not edit the canonical clean panel.
+This document records the data boundary for the paper repository. I keep the IPEDS construction work in `IPEDSDB_Panel`; this repository starts from the released clean panel and builds the research extract used for analysis.
+
+The point of the protocol is simple: a reader should be able to see where the input data came from, how the sample is defined, what the preparation script checks, and which files are generated locally.
 
 ## Inputs
 
-Required local inputs:
+The first preparation script requires two local files:
 
 - `panel_clean_analysis_2004_2023.parquet`
 - `dictionary_lake.parquet`
 
-Recommended source location:
+By default, the script looks for them under:
 
 ```text
 $IPEDSDB_ROOT/Panels/panel_clean_analysis_2004_2023.parquet
@@ -18,7 +20,7 @@ $IPEDSDB_ROOT/Dictionary/dictionary_lake.parquet
 
 ## First analysis sample
 
-The default sample is four-year Title IV institutions:
+The default sample keeps four-year Title IV institutions:
 
 ```text
 PSET4FLG = 1
@@ -26,11 +28,11 @@ SECTOR in (1, 2, 3)
 year = 2009:2023
 ```
 
-The 2009 start follows the first non-null year for the COA component fields used to build headroom measures. Net-price income bands begin later and are treated as secondary diagnostics.
+The 2009 start follows the first non-null year for the cost-of-attendance component fields used to build headroom measures. Net-price income bands begin later, so the script keeps them as secondary diagnostics rather than primary sample requirements.
 
 ## Data integrity rules
 
-The first preparation script enforces:
+Before writing the analysis panel, the script checks:
 
 - one row per `UNITID` and `year`
 - no missing `UNITID` or `year`
@@ -43,5 +45,4 @@ The first preparation script enforces:
 
 ## Generated files
 
-Generated files belong in `outputs/` and are ignored by Git unless a small summary is intentionally added for release documentation.
-
+Generated files belong in `outputs/` and are ignored by Git. I commit the code and documentation needed to rebuild them, not the generated data files themselves.

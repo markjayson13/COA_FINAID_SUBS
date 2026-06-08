@@ -8,7 +8,11 @@ import pyarrow.parquet as pq
 
 from coa_finaid_subs.prepare_analysis_panel import (
     DEFAULT_VARIABLE_CONFIG,
+    HARMONIZED_NET_PRICE_DEFS,
+    derive_metadata_flags,
     load_variable_specs,
+    metadata_code_summary,
+    metadata_flag_summary,
     parse_int_list,
     parse_years,
     resolve_columns,
@@ -145,7 +149,7 @@ def complete_case_scenarios(sample: pd.DataFrame) -> pd.DataFrame:
             "ACTCM25",
             "ACTCM75",
         ],
-        "net_price_current_income_bands": [
+        "net_price_private_current_income_bands_npt_raw": [
             "year",
             "UNITID",
             "PSET4FLG",
@@ -203,6 +207,28 @@ def complete_case_scenarios(sample: pd.DataFrame) -> pd.DataFrame:
             "missing_columns": "|".join(missing_finance_cols),
         }
     )
+    net_price_required = ["year", "UNITID", "PSET4FLG", "SECTOR", "CONTROL"]
+    net_price_cols = [col for pair in HARMONIZED_NET_PRICE_DEFS.values() for col in pair]
+    missing_net_price_cols = [col for col in net_price_required + net_price_cols if col.upper() not in name_map]
+    if missing_net_price_cols or "CONTROL" not in name_map:
+        net_price_complete = sample.iloc[0:0]
+    else:
+        base_mask = sample[[name_map[col.upper()] for col in net_price_required]].notna().all(axis=1)
+        control = pd.to_numeric(sample[name_map["CONTROL"]], errors="coerce")
+        public_cols = [name_map[public_col.upper()] for public_col, _ in HARMONIZED_NET_PRICE_DEFS.values()]
+        private_cols = [name_map[private_col.upper()] for _, private_col in HARMONIZED_NET_PRICE_DEFS.values()]
+        public_mask = control.eq(1) & sample[public_cols].notna().all(axis=1)
+        private_mask = control.isin([2, 3]) & sample[private_cols].notna().all(axis=1)
+        net_price_complete = sample[base_mask & (public_mask | private_mask)]
+    rows.append(
+        {
+            "scenario": "net_price_current_income_bands_sector_appropriate",
+            "rows": int(len(net_price_complete)),
+            "unitids": int(net_price_complete["UNITID"].nunique(dropna=True)) if "UNITID" in net_price_complete else 0,
+            "row_share": len(net_price_complete) / len(sample) if len(sample) else 0.0,
+            "missing_columns": "|".join(missing_net_price_cols),
+        }
+    )
     return pd.DataFrame(rows)
 
 
@@ -233,17 +259,27 @@ def audit_variable_config(
     coverage = variable_coverage(sample, specs, missing_requested)
     groups = group_coverage(coverage)
     complete_cases = complete_case_scenarios(sample)
+    metadata_flags = derive_metadata_flags(sample)
+    metadata_sample = pd.concat([sample, metadata_flags], axis=1)
+    metadata_summary = metadata_flag_summary(metadata_sample)
+    metadata_codes = metadata_code_summary(sample)
 
     coverage_path = output_dir / "variable_config_coverage.csv"
     group_path = output_dir / "variable_group_coverage.csv"
     complete_path = output_dir / "complete_case_scenarios.csv"
+    metadata_path = output_dir / "metadata_flag_summary.csv"
+    metadata_code_path = output_dir / "metadata_code_summary.csv"
     coverage.to_csv(coverage_path, index=False)
     groups.to_csv(group_path, index=False)
     complete_cases.to_csv(complete_path, index=False)
+    metadata_summary.to_csv(metadata_path, index=False)
+    metadata_codes.to_csv(metadata_code_path, index=False)
     return {
         "coverage": coverage_path,
         "groups": group_path,
         "complete_cases": complete_path,
+        "metadata_flags": metadata_path,
+        "metadata_codes": metadata_code_path,
     }
 
 

@@ -40,7 +40,8 @@ The default first-stage extract writes:
 - derived COA and headroom variables
 - cleaned net-price diagnostics
 - sector-harmonized finance controls
+- IPEDS metadata exposure flags for imputation, revisions, and parent-linked records
 - admissions, location, mission, and student-body controls
 - manifest and audit tables documenting all selected variables
 
-The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the primary sample contained 43,476 institution-years and 3,769 institutions. The expanded extract wrote 246 columns. The selected raw-variable contract contained 176 variables, all present in the source panel.
+The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the primary sample contained 43,476 institution-years and 3,769 institutions. The expanded extract wrote 335 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

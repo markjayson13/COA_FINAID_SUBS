@@ -11,6 +11,40 @@ ICLEVEL,sample,institution level,true
 HLOFFER,sample,highest offering diagnostic,false
 F2PELL,finance_pell_flag,FASB Pell accounting-treatment flag,false
 F3PELL,finance_pell_flag,for-profit Pell accounting-treatment flag,false
+IMP_IC,metadata_flag,institutional characteristics imputation code,false
+IMP_SFA,metadata_flag,student financial aid imputation code,false
+IMP_F,metadata_flag,finance imputation code,false
+IMP_EF,metadata_flag,enrollment imputation code,false
+IMP_E12,metadata_flag,12-month enrollment imputation code,false
+IMP_ADM,metadata_flag,admissions imputation code,false
+LOCK_IC,metadata_flag,institutional characteristics collection-close status,false
+LOCK_SFA,metadata_flag,student financial aid collection-close status,false
+LOCK_F,metadata_flag,finance collection-close status,false
+LOCK_EF,metadata_flag,enrollment collection-close status,false
+LOCK_E12,metadata_flag,12-month enrollment collection-close status,false
+LOCK_ADM,metadata_flag,admissions collection-close status,false
+REV_IC,metadata_flag,institutional characteristics revision status,false
+REV_SFA,metadata_flag,student financial aid revision status,false
+REV_F,metadata_flag,finance revision status,false
+REV_EF,metadata_flag,enrollment revision status,false
+REV_E12,metadata_flag,12-month enrollment revision status,false
+REV_ADM,metadata_flag,admissions revision status,false
+IDX_SFA,metadata_parent_child,student financial aid parent institution UNITID,false
+IDX_F,metadata_parent_child,finance parent institution UNITID,false
+IDX_EF,metadata_parent_child,enrollment parent institution UNITID,false
+IDX_E12,metadata_parent_child,12-month enrollment parent institution UNITID,false
+IDX_ADM,metadata_parent_child,admissions parent institution UNITID,false
+PRCH_SFA,metadata_parent_child,student financial aid parent-child indicator,false
+PRCH_F,metadata_parent_child,finance parent-child indicator,false
+PRCH_EF,metadata_parent_child,enrollment parent-child indicator,false
+PRCH_E12,metadata_parent_child,12-month enrollment parent-child indicator,false
+PRCH_ADM,metadata_parent_child,admissions parent-child indicator,false
+PCSFA_F,metadata_parent_child,student financial aid parent-child allocation factor,false
+PCF_F,metadata_parent_child,finance parent-child allocation factor,false
+PCF_F_RV,metadata_parent_child,revised finance parent-child allocation factor,false
+PCEF_F,metadata_parent_child,enrollment parent-child allocation factor,false
+PCE12_F,metadata_parent_child,12-month enrollment parent-child allocation factor,false
+PCADM_F,metadata_parent_child,admissions parent-child allocation factor,false
 STABBR,control_location,state abbreviation,true
 FIPS,control_location,FIPS state code,true
 OBEREG,control_location,geographic region,true
@@ -133,11 +167,16 @@ NPIST2,net_price_overall,average net price for grant-aid recipients two-year lag
 NPGRN0,net_price_overall,average net price for grant or scholarship recipients current year,false
 NPGRN1,net_price_overall,average net price for grant or scholarship recipients one-year lag,false
 NPGRN2,net_price_overall,average net price for grant or scholarship recipients two-year lag,false
-NPT410,net_price_income,average net price for 0-30000 income band current year,false
-NPT420,net_price_income,average net price for 30001-48000 income band current year,false
-NPT430,net_price_income,average net price for 48001-75000 income band current year,false
-NPT440,net_price_income,average net price for 75001-110000 income band current year,false
-NPT450,net_price_income,average net price for over-110000 income band current year,false
+NPIS410,net_price_income_public,public average net price for 0-30000 income band current year,false
+NPIS420,net_price_income_public,public average net price for 30001-48000 income band current year,false
+NPIS430,net_price_income_public,public average net price for 48001-75000 income band current year,false
+NPIS440,net_price_income_public,public average net price for 75001-110000 income band current year,false
+NPIS450,net_price_income_public,public average net price for over-110000 income band current year,false
+NPT410,net_price_income_private,private average net price for 0-30000 income band current year,false
+NPT420,net_price_income_private,private average net price for 30001-48000 income band current year,false
+NPT430,net_price_income_private,private average net price for 48001-75000 income band current year,false
+NPT440,net_price_income_private,private average net price for 75001-110000 income band current year,false
+NPT450,net_price_income_private,private average net price for over-110000 income band current year,false
 F1A06,finance_public_gasb,total assets for public GASB institutions,false
 F1B01,finance_public_gasb,tuition and fees revenue for public GASB institutions,false
 F1B09,finance_public_gasb,total operating revenues for public GASB institutions,false

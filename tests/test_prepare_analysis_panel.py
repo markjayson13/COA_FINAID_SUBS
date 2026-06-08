@@ -31,6 +31,40 @@ def panel_rows() -> list[dict]:
         "HLOFFER": 5,
         "F2PELL": 1,
         "F3PELL": None,
+        "IMP_IC": 1,
+        "IMP_SFA": 1,
+        "IMP_F": 1,
+        "IMP_EF": 1,
+        "IMP_E12": 1,
+        "IMP_ADM": 1,
+        "LOCK_IC": 1,
+        "LOCK_SFA": 1,
+        "LOCK_F": 1,
+        "LOCK_EF": 1,
+        "LOCK_E12": 1,
+        "LOCK_ADM": 1,
+        "REV_IC": 0,
+        "REV_SFA": 0,
+        "REV_F": 0,
+        "REV_EF": 0,
+        "REV_E12": 0,
+        "REV_ADM": 0,
+        "IDX_SFA": -2,
+        "IDX_F": -2,
+        "IDX_EF": -2,
+        "IDX_E12": -2,
+        "IDX_ADM": -2,
+        "PRCH_SFA": -2,
+        "PRCH_F": -2,
+        "PRCH_EF": -2,
+        "PRCH_E12": -2,
+        "PRCH_ADM": -2,
+        "PCSFA_F": 0,
+        "PCF_F": 0,
+        "PCF_F_RV": 0,
+        "PCEF_F": 0,
+        "PCE12_F": 0,
+        "PCADM_F": 0,
         "STABBR": "NV",
         "FIPS": 32,
         "OBEREG": 6,
@@ -116,6 +150,11 @@ def panel_rows() -> list[dict]:
         "UPGRNTN": 100,
         "UPGRNTP": 50.0,
         "UPGRNTT": 330_000,
+        "NPIS410": 900,
+        "NPIS420": 1_900,
+        "NPIS430": 2_900,
+        "NPIS440": 3_900,
+        "NPIS450": 4_900,
         "NPT410": 1_200,
         "NPT420": 2_200,
         "NPT430": 3_200,
@@ -147,7 +186,19 @@ def panel_rows() -> list[dict]:
     }
     return [
         {"year": 2008, "UNITID": 1, "PSET4FLG": 1, "SECTOR": 1, **base},
-        {"year": 2009, "UNITID": 1, "PSET4FLG": 1, "SECTOR": 1, **base, "NPT410": -10},
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "PSET4FLG": 1,
+            "SECTOR": 1,
+            **base,
+            "NPIS410": -20,
+            "NPT410": -10,
+            "IMP_SFA": 2,
+            "REV_F": 1,
+            "IDX_SFA": 99_999,
+            "PCSFA_F": 50,
+        },
         {"year": 2009, "UNITID": 2, "PSET4FLG": 1, "SECTOR": 2, **base, "CONTROL": 2, "CHG2AY0": 12_000},
         {"year": 2009, "UNITID": 3, "PSET4FLG": 2, "SECTOR": 1, **base},
         {"year": 2009, "UNITID": 4, "PSET4FLG": 1, "SECTOR": 4, **base},
@@ -170,6 +221,7 @@ def dictionary_rows() -> list[dict]:
             ("PGRNT_T", "Total amount of Pell grant aid received", "SFA"),
             ("IGRNT_A", "Average amount of institutional grant aid received", "SFA"),
             ("IGRNT_T", "Total amount of institutional grant aid received", "SFA"),
+            ("NPIS410", "Public average net price income 0-30000", "SFA"),
             ("NPT410", "Average net price income 0-30000", "SFA"),
             ("STABBR", "State abbreviation", "HD"),
             ("OPENADMP", "Open admission policy", "IC"),
@@ -211,6 +263,11 @@ def test_variable_config_contains_core_inputs() -> None:
     assert "F1D01" in names
     assert "F2B01" in names
     assert "F3B01" in names
+    assert "NPIS410" in names
+    assert "NPT410" in names
+    assert "IMP_SFA" in names
+    assert "REV_F" in names
+    assert "PCSFA_F" in names
 
 
 def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_path: Path) -> None:
@@ -256,11 +313,34 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert first["NPT410"] == -10
     assert pd.isna(first["NPT410_CLEAN"])
     assert bool(first["FLAG_NEGATIVE_NPT410"]) is True
+    assert first["NET_PRICE_0_30000"] == -20
+    assert pd.isna(first["NET_PRICE_0_30000_CLEAN"])
+    assert bool(first["FLAG_NEGATIVE_NET_PRICE_0_30000"]) is True
+    assert bool(first["FLAG_IPEDS_SFA_IMPUTED"]) is True
+    assert bool(first["FLAG_IPEDS_SFA_PARENT_LINK"]) is True
+    assert bool(first["FLAG_IPEDS_F_REVISED"]) is True
+    assert bool(first["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]) is True
+    assert second["NET_PRICE_0_30000"] == 1_200
+    assert second["NET_PRICE_0_30000_CLEAN"] == 1_200
+    assert bool(second["FLAG_IPEDS_SFA_IMPUTED"]) is False
+    assert bool(second["FLAG_IPEDS_SFA_PARENT_LINK"]) is False
+    assert bool(second["FLAG_IPEDS_F_REVISED"]) is False
+    assert bool(second["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]) is False
 
     manifest = pd.read_csv(output_dir / "analysis_variable_manifest.csv")
     assert manifest.loc[manifest["varname"] == "PGRNT_A", "group"].iloc[0] == "ftft_pell"
+    assert manifest.loc[manifest["varname"] == "NET_PRICE_0_30000", "group"].iloc[0] == "derived_net_price"
+    assert manifest.loc[manifest["varname"] == "FLAG_IPEDS_SFA_IMPUTED", "group"].iloc[0] == "derived_metadata_flag"
     sample = pd.read_csv(output_dir / "analysis_sample_counts.csv")
     assert int(sample.loc[sample["sample"] == "primary_four_year_titleiv", "rows"].iloc[0]) == 2
+    metadata = pd.read_csv(output_dir / "analysis_metadata_flag_summary.csv")
+    flagged = metadata[
+        (metadata["scope"] == "overall")
+        & (metadata["flag"] == "FLAG_IPEDS_SFA_IMPUTED")
+    ]["flagged_rows"].iloc[0]
+    assert int(flagged) == 1
+    metadata_codes = pd.read_csv(output_dir / "analysis_metadata_code_summary.csv")
+    assert "LOCK_SFA" in set(metadata_codes["varname"])
 
 
 def test_prepare_analysis_panel_fails_on_duplicate_unitid_year(tmp_path: Path) -> None:
@@ -316,6 +396,11 @@ def test_audit_variable_config_writes_coverage_outputs(tmp_path: Path) -> None:
 
     coverage = pd.read_csv(outputs["coverage"])
     complete_cases = pd.read_csv(outputs["complete_cases"])
-    assert {"coverage", "groups", "complete_cases"} == set(outputs)
+    metadata_flags = pd.read_csv(outputs["metadata_flags"])
+    metadata_codes = pd.read_csv(outputs["metadata_codes"])
+    assert {"coverage", "groups", "complete_cases", "metadata_flags", "metadata_codes"} == set(outputs)
     assert coverage.loc[coverage["varname"] == "PGRNT_A", "coverage"].iloc[0] == 1.0
     assert "primary_headroom_pell_institutional_avg" in set(complete_cases["scenario"])
+    assert "net_price_current_income_bands_sector_appropriate" in set(complete_cases["scenario"])
+    assert "FLAG_IPEDS_SFA_IMPUTED" in set(metadata_flags["flag"])
+    assert "LOCK_SFA" in set(metadata_codes["varname"])

@@ -76,12 +76,16 @@ The script writes:
 - `analysis_sample_counts.csv`
 - `analysis_missingness_by_year.csv`
 - `analysis_value_sanity.csv`
+- `analysis_metadata_flag_summary.csv`
+- `analysis_metadata_code_summary.csv`
 
 The variable audit writes:
 
 - `variable_config_coverage.csv`
 - `variable_group_coverage.csv`
 - `complete_case_scenarios.csv`
+- `metadata_flag_summary.csv`
+- `metadata_code_summary.csv`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

@@ -81,12 +81,25 @@ NET_PRICE_VARS = (
     "NPGRN0",
     "NPGRN1",
     "NPGRN2",
+    "NPIS410",
+    "NPIS420",
+    "NPIS430",
+    "NPIS440",
+    "NPIS450",
     "NPT410",
     "NPT420",
     "NPT430",
     "NPT440",
     "NPT450",
 )
+HARMONIZED_NET_PRICE_DEFS = {
+    "NET_PRICE_0_30000": ("NPIS410", "NPT410"),
+    "NET_PRICE_30001_48000": ("NPIS420", "NPT420"),
+    "NET_PRICE_48001_75000": ("NPIS430", "NPT430"),
+    "NET_PRICE_75001_110000": ("NPIS440", "NPT440"),
+    "NET_PRICE_OVER_110000": ("NPIS450", "NPT450"),
+}
+HARMONIZED_NET_PRICE_VARS = tuple(HARMONIZED_NET_PRICE_DEFS)
 CORE_MONEY_VARS = (
     "CHG1AY0",
     "CHG2AY0",
@@ -167,6 +180,53 @@ FINANCE_MONEY_VARS = (
     "F3E03C1",
     "F3E071",
 )
+METADATA_STATUS_VARS = (
+    "IMP_IC",
+    "IMP_SFA",
+    "IMP_F",
+    "IMP_EF",
+    "IMP_E12",
+    "IMP_ADM",
+    "LOCK_IC",
+    "LOCK_SFA",
+    "LOCK_F",
+    "LOCK_EF",
+    "LOCK_E12",
+    "LOCK_ADM",
+    "REV_IC",
+    "REV_SFA",
+    "REV_F",
+    "REV_EF",
+    "REV_E12",
+    "REV_ADM",
+    "IDX_SFA",
+    "IDX_F",
+    "IDX_EF",
+    "IDX_E12",
+    "IDX_ADM",
+    "PRCH_SFA",
+    "PRCH_F",
+    "PRCH_EF",
+    "PRCH_E12",
+    "PRCH_ADM",
+    "PCSFA_F",
+    "PCF_F",
+    "PCF_F_RV",
+    "PCEF_F",
+    "PCE12_F",
+    "PCADM_F",
+)
+METADATA_CODE_SUMMARY_VARS = tuple(
+    col for col in METADATA_STATUS_VARS if col.startswith(("IMP_", "LOCK_", "REV_", "PRCH_"))
+)
+METADATA_COMPONENTS = {
+    "IC": {"imp": "IMP_IC", "lock": "LOCK_IC", "rev": "REV_IC"},
+    "SFA": {"imp": "IMP_SFA", "lock": "LOCK_SFA", "rev": "REV_SFA", "idx": "IDX_SFA", "prch": "PRCH_SFA", "pc": "PCSFA_F"},
+    "F": {"imp": "IMP_F", "lock": "LOCK_F", "rev": "REV_F", "idx": "IDX_F", "prch": "PRCH_F", "pc": "PCF_F", "pc_rev": "PCF_F_RV"},
+    "EF": {"imp": "IMP_EF", "lock": "LOCK_EF", "rev": "REV_EF", "idx": "IDX_EF", "prch": "PRCH_EF", "pc": "PCEF_F"},
+    "E12": {"imp": "IMP_E12", "lock": "LOCK_E12", "rev": "REV_E12", "idx": "IDX_E12", "prch": "PRCH_E12", "pc": "PCE12_F"},
+    "ADM": {"imp": "IMP_ADM", "lock": "LOCK_ADM", "rev": "REV_ADM", "idx": "IDX_ADM", "prch": "PRCH_ADM", "pc": "PCADM_F"},
+}
 
 
 @dataclass(frozen=True)
@@ -353,6 +413,55 @@ def safe_log(series: pd.Series) -> pd.Series:
     return positive.map(lambda value: math.log(value) if pd.notna(value) else pd.NA)
 
 
+def numeric_or_na(df: pd.DataFrame, column: str) -> pd.Series:
+    if column not in df.columns:
+        return pd.Series(pd.NA, index=df.index, dtype="Float64")
+    return pd.to_numeric(df[column], errors="coerce")
+
+
+def derive_metadata_flags(df: pd.DataFrame) -> pd.DataFrame:
+    flags: dict[str, pd.Series] = {}
+    component_exposures: list[pd.Series] = []
+
+    for component, fields in METADATA_COMPONENTS.items():
+        imp = numeric_or_na(df, fields["imp"])
+        rev = numeric_or_na(df, fields["rev"])
+        imputed = imp.notna() & ~imp.isin([-2, 1])
+        revised = rev.eq(1)
+
+        parent_parts: list[pd.Series] = []
+        for field_key in ("idx", "pc", "pc_rev"):
+            field = fields.get(field_key)
+            if not field:
+                continue
+            values = numeric_or_na(df, field)
+            if field_key == "idx":
+                parent_parts.append(values.notna() & values.ne(-2))
+            else:
+                parent_parts.append(values.notna() & values.gt(0))
+        if parent_parts:
+            parent_linked = parent_parts[0].copy()
+            for part in parent_parts[1:]:
+                parent_linked = parent_linked | part
+        else:
+            parent_linked = pd.Series(False, index=df.index)
+
+        exposure = imputed | revised | parent_linked
+        flags[f"FLAG_IPEDS_{component}_IMPUTED"] = imputed
+        flags[f"FLAG_IPEDS_{component}_REVISED"] = revised
+        flags[f"FLAG_IPEDS_{component}_PARENT_LINK"] = parent_linked
+        flags[f"FLAG_IPEDS_{component}_METADATA_EXPOSURE"] = exposure
+        component_exposures.append(exposure)
+
+    if component_exposures:
+        any_exposure = component_exposures[0].copy()
+        for exposure in component_exposures[1:]:
+            any_exposure = any_exposure | exposure
+        flags["FLAG_IPEDS_ANY_METADATA_EXPOSURE"] = any_exposure
+
+    return pd.DataFrame(flags, index=df.index)
+
+
 def sector_finance_value(
     df: pd.DataFrame,
     public_col: str | None = None,
@@ -369,6 +478,18 @@ def sector_finance_value(
     return result
 
 
+def sector_net_price_value(df: pd.DataFrame, public_col: str, private_col: str) -> pd.Series:
+    result = pd.Series(pd.NA, index=df.index, dtype="Float64")
+    if "CONTROL" not in df.columns:
+        return result
+    control = pd.to_numeric(df["CONTROL"], errors="coerce")
+    if public_col in df.columns:
+        result = result.mask(control.eq(1), pd.to_numeric(df[public_col], errors="coerce"))
+    if private_col in df.columns:
+        result = result.mask(control.isin([2, 3]), pd.to_numeric(df[private_col], errors="coerce"))
+    return result
+
+
 def add_ratio(out: pd.DataFrame, derived: dict[str, pd.Series], name: str, numerator: str, denominator: str) -> None:
     if numerator in out.columns and denominator in out.columns:
         derived[name] = safe_divide(out[numerator], out[denominator])
@@ -376,7 +497,7 @@ def add_ratio(out: pd.DataFrame, derived: dict[str, pd.Series], name: str, numer
 
 def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    numeric_inputs = CORE_MONEY_VARS + NET_PRICE_VARS + FINANCE_MONEY_VARS + COUNT_PERCENT_VARS
+    numeric_inputs = CORE_MONEY_VARS + NET_PRICE_VARS + FINANCE_MONEY_VARS + COUNT_PERCENT_VARS + METADATA_STATUS_VARS
     add_numeric_columns(out, [col for col in numeric_inputs if col in out.columns])
     derived: dict[str, pd.Series] = {}
 
@@ -459,6 +580,15 @@ def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
         if source in out.columns or source in derived:
             derived[target] = safe_log(get_series(source))
 
+    for name, (public_col, private_col) in HARMONIZED_NET_PRICE_DEFS.items():
+        if public_col in out.columns or private_col in out.columns:
+            harmonized = sector_net_price_value(out, public_col, private_col)
+            flag_col = f"FLAG_NEGATIVE_{name}"
+            clean_col = f"{name}_CLEAN"
+            derived[name] = harmonized
+            derived[flag_col] = harmonized < 0
+            derived[clean_col] = harmonized.mask(derived[flag_col])
+
     for col in NET_PRICE_VARS:
         if col not in out.columns:
             continue
@@ -466,6 +596,10 @@ def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
         clean_col = f"{col}_CLEAN"
         derived[flag_col] = out[col] < 0
         derived[clean_col] = out[col].mask(derived[flag_col])
+
+    metadata_flags = derive_metadata_flags(out)
+    for col in metadata_flags.columns:
+        derived[col] = metadata_flags[col]
 
     if derived:
         out = pd.concat([out, pd.DataFrame(derived, index=out.index)], axis=1)
@@ -543,7 +677,8 @@ def missingness_by_year(df: pd.DataFrame) -> pd.DataFrame:
 
 def value_sanity(df: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for col in [c for c in CORE_MONEY_VARS + NET_PRICE_VARS + FINANCE_MONEY_VARS if c in df.columns]:
+    sanity_vars = CORE_MONEY_VARS + NET_PRICE_VARS + HARMONIZED_NET_PRICE_VARS + FINANCE_MONEY_VARS
+    for col in [c for c in sanity_vars if c in df.columns]:
         s = pd.to_numeric(df[col], errors="coerce")
         rows.append(
             {
@@ -556,6 +691,54 @@ def value_sanity(df: pd.DataFrame) -> pd.DataFrame:
                 "zero_count": int((s == 0).sum()),
             }
         )
+    return pd.DataFrame(rows)
+
+
+def metadata_flag_summary(df: pd.DataFrame) -> pd.DataFrame:
+    flag_cols = [col for col in df.columns if col.startswith("FLAG_IPEDS_")]
+    rows: list[dict[str, object]] = []
+
+    def add_rows(scope: str, scope_value: object, group: pd.DataFrame) -> None:
+        for col in flag_cols:
+            s = group[col].fillna(False).astype(bool)
+            rows.append(
+                {
+                    "scope": scope,
+                    "scope_value": scope_value,
+                    "flag": col,
+                    "rows": int(len(group)),
+                    "flagged_rows": int(s.sum()),
+                    "flagged_share": float(s.mean()) if len(group) else 0.0,
+                }
+            )
+
+    add_rows("overall", "all", df)
+    if "year" in df.columns:
+        for year, group in df.groupby("year", dropna=False):
+            add_rows("year", year, group)
+    if "CONTROL" in df.columns:
+        for control, group in df.groupby("CONTROL", dropna=False):
+            add_rows("control", control, group)
+    return pd.DataFrame(rows)
+
+
+def metadata_code_summary(df: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for col in [c for c in METADATA_CODE_SUMMARY_VARS if c in df.columns]:
+        s = pd.to_numeric(df[col], errors="coerce")
+        counts = s.dropna().value_counts().sort_index()
+        for value, count in counts.items():
+            rows.append(
+                {
+                    "varname": col,
+                    "code": value,
+                    "rows": int(len(df)),
+                    "nonnull": int(s.notna().sum()),
+                    "count": int(count),
+                    "share_of_rows": float(count / len(df)) if len(df) else 0.0,
+                    "share_of_nonnull": float(count / s.notna().sum()) if s.notna().sum() else 0.0,
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -682,6 +865,57 @@ def derived_manifest_rows() -> pd.DataFrame:
         {"varname": "LN_FIN_TOTAL_EXPENSES", "group": "derived_scale", "role": "log sector-harmonized total expenses", "required": False},
         {"varname": "LN_FIN_TOTAL_ASSETS", "group": "derived_scale", "role": "log sector-harmonized total assets", "required": False},
     ]
+    for component in METADATA_COMPONENTS:
+        label = component.lower()
+        derived_specs.extend(
+            [
+                {
+                    "varname": f"FLAG_IPEDS_{component}_IMPUTED",
+                    "group": "derived_metadata_flag",
+                    "role": f"{label} component has an imputation-method code other than baseline reported or not applicable",
+                    "required": False,
+                },
+                {
+                    "varname": f"FLAG_IPEDS_{component}_REVISED",
+                    "group": "derived_metadata_flag",
+                    "role": f"{label} component has an IPEDS prior-year revision indicator",
+                    "required": False,
+                },
+                {
+                    "varname": f"FLAG_IPEDS_{component}_PARENT_LINK",
+                    "group": "derived_metadata_flag",
+                    "role": f"{label} component has a parent UNITID or positive allocation factor",
+                    "required": False,
+                },
+                {
+                    "varname": f"FLAG_IPEDS_{component}_METADATA_EXPOSURE",
+                    "group": "derived_metadata_flag",
+                    "role": f"{label} component is imputed, revised, or parent-linked",
+                    "required": False,
+                },
+            ]
+        )
+    derived_specs.append(
+        {
+            "varname": "FLAG_IPEDS_ANY_METADATA_EXPOSURE",
+            "group": "derived_metadata_flag",
+            "role": "any tracked IPEDS component is imputed, revised, or parent-linked",
+            "required": False,
+        }
+    )
+    for name, (public_col, private_col) in HARMONIZED_NET_PRICE_DEFS.items():
+        derived_specs.extend(
+            [
+                {
+                    "varname": name,
+                    "group": "derived_net_price",
+                    "role": f"sector-harmonized net price from public {public_col} and private {private_col}",
+                    "required": False,
+                },
+                {"varname": f"FLAG_NEGATIVE_{name}", "group": "quality_flag", "role": f"negative harmonized {name} flag", "required": False},
+                {"varname": f"{name}_CLEAN", "group": "cleaned_net_price", "role": f"{name} with negative values set null", "required": False},
+            ]
+        )
     for prefix, label in (
         ("AGRNT", "total grant"),
         ("FGRNT", "federal grant"),
@@ -764,6 +998,8 @@ def prepare_analysis_panel(
     sample_counts_path = output_dir / "analysis_sample_counts.csv"
     missingness_path = output_dir / "analysis_missingness_by_year.csv"
     value_sanity_path = output_dir / "analysis_value_sanity.csv"
+    metadata_summary_path = output_dir / "analysis_metadata_flag_summary.csv"
+    metadata_code_path = output_dir / "analysis_metadata_code_summary.csv"
     summary_path = output_dir / "analysis_build_summary.json"
 
     analysis.to_parquet(analysis_path, index=False)
@@ -772,10 +1008,12 @@ def prepare_analysis_panel(
     sample_counts(df, year_filtered, analysis).to_csv(sample_counts_path, index=False)
     missingness_by_year(analysis).to_csv(missingness_path, index=False)
     value_sanity(analysis).to_csv(value_sanity_path, index=False)
+    metadata_flag_summary(analysis).to_csv(metadata_summary_path, index=False)
+    metadata_code_summary(analysis).to_csv(metadata_code_path, index=False)
 
     negative_net_price_counts = {
         col: int((pd.to_numeric(analysis[col], errors="coerce") < 0).sum())
-        for col in NET_PRICE_VARS
+        for col in NET_PRICE_VARS + HARMONIZED_NET_PRICE_VARS
         if col in analysis.columns
     }
     summary = {
@@ -803,6 +1041,8 @@ def prepare_analysis_panel(
             "sample_counts": str(sample_counts_path),
             "missingness_by_year": str(missingness_path),
             "value_sanity": str(value_sanity_path),
+            "metadata_flag_summary": str(metadata_summary_path),
+            "metadata_code_summary": str(metadata_code_path),
         },
     }
     write_json(summary_path, summary)

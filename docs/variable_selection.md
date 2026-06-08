@@ -53,6 +53,19 @@ Admissions controls include open-admissions status, applications, admissions, en
 
 Scale controls use the SFA cohort fields because the ordinary enrollment totals in this local clean panel are present in the schema but empty for the analysis sample. The useful fields are `SCUGRAD`, `SCUGFFN`, `SCUGFFP`, `SCFA1N`, and `SCFA2`.
 
+## IPEDS metadata fields
+
+The extract keeps IPEDS component metadata for the parts of the panel used in the paper:
+
+- Institutional Characteristics: `IMP_IC`, `LOCK_IC`, `REV_IC`
+- Student Financial Aid: `IMP_SFA`, `LOCK_SFA`, `REV_SFA`, `IDX_SFA`, `PRCH_SFA`, `PCSFA_F`
+- Finance: `IMP_F`, `LOCK_F`, `REV_F`, `IDX_F`, `PRCH_F`, `PCF_F`, `PCF_F_RV`
+- Enrollment: `IMP_EF`, `LOCK_EF`, `REV_EF`, `IDX_EF`, `PRCH_EF`, `PCEF_F`
+- 12-month Enrollment: `IMP_E12`, `LOCK_E12`, `REV_E12`, `IDX_E12`, `PRCH_E12`, `PCE12_F`
+- Admissions: `IMP_ADM`, `LOCK_ADM`, `REV_ADM`, `IDX_ADM`, `PRCH_ADM`, `PCADM_F`
+
+The raw fields stay in the panel. The preparation script also derives component flags for imputation, prior-year revision, and parent-linked reporting. These flags support sample descriptions and later sensitivity checks. They do not replace the raw IPEDS codes.
+
 ## Finance controls
 
 Finance variables are sector-specific in IPEDS. The raw fields are kept for audit, then the preparation script builds common controls by sector:
@@ -65,13 +78,15 @@ The derived finance controls include tuition revenue, total revenue, total expen
 
 ## Secondary outcomes
 
-Net-price variables are retained as secondary outcomes and diagnostics. They are thinner than the main aid and COA fields. In the verified local panel, complete cases for all five current income-band net-price fields were 15,175 institution-years and 1,744 institutions.
+Net-price variables are retained as secondary outcomes and diagnostics. They are thinner than the main aid and COA fields.
+
+The current income-band net-price variables are sector-specific in the clean panel. Public institutions report through the `NPIS410` to `NPIS450` family. Private nonprofit and private for-profit institutions report through the `NPT410` to `NPT450` family. The preparation script keeps both raw families and builds harmonized `NET_PRICE_*` fields by institution control.
 
 ## Current verification
 
 With the local panel verified on June 8, 2026:
 
-- selected raw variables: 176
+- selected raw variables: 215
 - missing selected variables in the source panel: 0
 - main sample: 43,476 institution-years and 3,769 institutions
 - primary headroom, Pell, and institutional-grant complete cases: 28,989 institution-years and 2,885 institutions
@@ -79,4 +94,6 @@ With the local panel verified on June 8, 2026:
 - all-undergraduate aid family: 36,758 institution-years and 3,212 institutions
 - sector-appropriate finance controls: 38,564 institution-years and 3,232 institutions
 - admissions/selectivity complete cases: 16,649 institution-years and 1,530 institutions
-- current net-price income-band complete cases: 15,175 institution-years and 1,744 institutions
+- private raw `NPT*` net-price income-band complete cases: 15,175 institution-years and 1,744 institutions
+- sector-harmonized current net-price income-band complete cases: 23,510 institution-years and 2,517 institutions
+- any tracked IPEDS metadata exposure: 10,150 institution-years

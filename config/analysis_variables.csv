@@ -1,0 +1,62 @@
+varname,group,role,required
+year,key,panel key,true
+UNITID,key,panel key,true
+INSTNM,identity,diagnostic institution name,false
+OPEID,identity,diagnostic federal-aid linkage,false
+PSET4FLG,sample,Title IV postsecondary sample flag,true
+PSEFLAG,sample,postsecondary sample diagnostic,false
+SECTOR,sample,four-year sector split,true
+CONTROL,sample,control split,true
+ICLEVEL,sample,institution level,true
+HLOFFER,sample,highest offering diagnostic,false
+F2PELL,finance_pell_flag,FASB Pell accounting-treatment flag,false
+F3PELL,finance_pell_flag,for-profit Pell accounting-treatment flag,false
+CHG2AY0,coa,COA tuition and fees input,true
+CHG3AY0,coa,COA out-of-state tuition and fees input,false
+CHG4AY0,coa,COA books and supplies input,true
+CHG5AY0,coa,on-campus room and board input,false
+CHG6AY0,coa,on-campus other expenses input,false
+CHG7AY0,coa,off-campus not-with-family room and board input,true
+CHG8AY0,coa,off-campus not-with-family other expenses input,true
+CHG9AY0,coa,off-campus with-family other expenses input,false
+AGRNT_A,ftft_grant,average total grant aid for FTFT students,false
+AGRNT_N,ftft_grant,count receiving total grant aid for FTFT students,false
+AGRNT_P,ftft_grant,percent receiving total grant aid for FTFT students,false
+AGRNT_T,ftft_grant,total grant aid for FTFT students,false
+FGRNT_A,ftft_federal_grant,average federal grant aid for FTFT students,false
+FGRNT_N,ftft_federal_grant,count receiving federal grant aid for FTFT students,false
+FGRNT_P,ftft_federal_grant,percent receiving federal grant aid for FTFT students,false
+FGRNT_T,ftft_federal_grant,total federal grant aid for FTFT students,false
+PGRNT_A,ftft_pell,average Pell grant aid for FTFT students,true
+PGRNT_N,ftft_pell,count receiving Pell grants for FTFT students,false
+PGRNT_P,ftft_pell,percent receiving Pell grants for FTFT students,false
+PGRNT_T,ftft_pell,total Pell grant aid for FTFT students,false
+IGRNT_A,ftft_institutional_grant,average institutional grant aid for FTFT students,true
+IGRNT_N,ftft_institutional_grant,count receiving institutional grant aid for FTFT students,false
+IGRNT_P,ftft_institutional_grant,percent receiving institutional grant aid for FTFT students,false
+IGRNT_T,ftft_institutional_grant,total institutional grant aid for FTFT students,false
+LOAN_A,ftft_loan,average loan aid for FTFT students,false
+LOAN_N,ftft_loan,count receiving loan aid for FTFT students,false
+LOAN_P,ftft_loan,percent receiving loan aid for FTFT students,false
+LOAN_T,ftft_loan,total loan aid for FTFT students,false
+FLOAN_A,ftft_federal_loan,average federal loan aid for FTFT students,false
+FLOAN_N,ftft_federal_loan,count receiving federal loan aid for FTFT students,false
+FLOAN_P,ftft_federal_loan,percent receiving federal loan aid for FTFT students,false
+FLOAN_T,ftft_federal_loan,total federal loan aid for FTFT students,false
+SCFA2,ftft_denominator,FTFT SFA cohort denominator,false
+SCFA1N,ftft_denominator,FTFT SFA count diagnostic,false
+SCFA1P,ftft_denominator,FTFT SFA percent diagnostic,false
+ANYAIDN,ftft_denominator,count receiving any aid,false
+ANYAIDP,ftft_denominator,percent receiving any aid,false
+UAGRNTA,undergraduate_aid,average grant aid for all undergraduates,false
+UFLOANA,undergraduate_aid,average federal loan aid for all undergraduates,false
+UPGRNTA,undergraduate_aid,average Pell grant aid for all undergraduates,false
+UPGRNTN,undergraduate_aid,count receiving Pell grants for all undergraduates,false
+UPGRNTP,undergraduate_aid,percent receiving Pell grants for all undergraduates,false
+UPGRNTT,undergraduate_aid,total Pell grant aid for all undergraduates,false
+NPT410,net_price,average net price for 0-30000 income band,false
+NPT420,net_price,average net price for 30001-48000 income band,false
+NPT430,net_price,average net price for 48001-75000 income band,false
+NPT440,net_price,average net price for 75001-110000 income band,false
+NPT450,net_price,average net price for over-110000 income band,false
+

@@ -20,15 +20,17 @@ $IPEDSDB_ROOT/Dictionary/dictionary_lake.parquet
 
 ## First analysis sample
 
-The default sample keeps four-year Title IV institutions:
+The default sample keeps four-year Title IV public and private nonprofit institutions:
 
 ```text
 PSET4FLG = 1
-SECTOR in (1, 2, 3)
+SECTOR in (1, 2)
 year = 2009:2023
 ```
 
 The 2009 start follows the first non-null year for the cost-of-attendance component fields used to build headroom measures. Net-price income bands begin later, so the script keeps them as secondary diagnostics rather than primary sample requirements.
+
+Private for-profit institutions are outside the baseline estimand. They remain buildable as a diagnostic sample with `--sectors 3`.
 
 ## Data integrity rules
 

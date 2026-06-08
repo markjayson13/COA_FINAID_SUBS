@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VARIABLE_CONFIG = REPO_ROOT / "config" / "analysis_variables.csv"
+DEFAULT_MAIN_SECTORS_SPEC = "1,2"
 KEY_VARS = ("year", "UNITID")
 CLASSIFICATION_VARS = (
     "PSET4FLG",
@@ -282,6 +283,21 @@ def parse_years(spec: str) -> list[int]:
 
 def parse_int_list(spec: str) -> list[int]:
     return [int(part.strip()) for part in spec.split(",") if part.strip()]
+
+
+def sector_scope_label(sectors: list[int]) -> str:
+    normalized = sorted(set(sectors))
+    if normalized == [1, 2]:
+        return "public_private_nonprofit"
+    if normalized == [1]:
+        return "public"
+    if normalized == [2]:
+        return "private_nonprofit"
+    if normalized == [3]:
+        return "private_forprofit_diagnostic"
+    if normalized == [1, 2, 3]:
+        return "all_four_year_titleiv"
+    return "sectors_" + "_".join(str(sector) for sector in normalized)
 
 
 def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
@@ -628,7 +644,7 @@ def validate_core_money_nonnegative(df: pd.DataFrame) -> None:
         raise SystemExit(f"Negative values in core money variables: {details}")
 
 
-def sample_counts(df: pd.DataFrame, year_filtered: pd.DataFrame, analysis: pd.DataFrame) -> pd.DataFrame:
+def sample_counts(df: pd.DataFrame, year_filtered: pd.DataFrame, analysis: pd.DataFrame, sector_label: str) -> pd.DataFrame:
     rows = [
         {
             "sample": "input_all_rows",
@@ -645,7 +661,7 @@ def sample_counts(df: pd.DataFrame, year_filtered: pd.DataFrame, analysis: pd.Da
             "max_year": int(year_filtered["year"].max()) if not year_filtered.empty else pd.NA,
         },
         {
-            "sample": "primary_four_year_titleiv",
+            "sample": f"analysis_four_year_titleiv_{sector_label}",
             "rows": len(analysis),
             "unitids": analysis["UNITID"].nunique(dropna=True),
             "min_year": int(analysis["year"].min()) if not analysis.empty else pd.NA,
@@ -967,7 +983,7 @@ def prepare_analysis_panel(
     output_dir: Path,
     variable_config: Path = DEFAULT_VARIABLE_CONFIG,
     years_spec: str = "2009:2023",
-    sectors_spec: str = "1,2,3",
+    sectors_spec: str = DEFAULT_MAIN_SECTORS_SPEC,
     title_iv_flag: int = 1,
 ) -> dict[str, object]:
     if not input_panel.exists():
@@ -993,7 +1009,8 @@ def prepare_analysis_panel(
     validate_core_money_nonnegative(analysis)
 
     year_label = f"{min(years)}_{max(years)}" if years else "all_years"
-    analysis_path = output_dir / f"analysis_panel_coa_headroom_{year_label}.parquet"
+    sector_label = sector_scope_label(sectors)
+    analysis_path = output_dir / f"analysis_panel_coa_headroom_{year_label}_{sector_label}.parquet"
     manifest_path = output_dir / "analysis_variable_manifest.csv"
     sample_counts_path = output_dir / "analysis_sample_counts.csv"
     missingness_path = output_dir / "analysis_missingness_by_year.csv"
@@ -1005,7 +1022,7 @@ def prepare_analysis_panel(
     analysis.to_parquet(analysis_path, index=False)
     manifest = read_dictionary_manifest(dictionary, specs, set(schema_cols))
     pd.concat([manifest, derived_manifest_rows()], ignore_index=True).to_csv(manifest_path, index=False)
-    sample_counts(df, year_filtered, analysis).to_csv(sample_counts_path, index=False)
+    sample_counts(df, year_filtered, analysis, sector_label).to_csv(sample_counts_path, index=False)
     missingness_by_year(analysis).to_csv(missingness_path, index=False)
     value_sanity(analysis).to_csv(value_sanity_path, index=False)
     metadata_flag_summary(analysis).to_csv(metadata_summary_path, index=False)
@@ -1028,6 +1045,7 @@ def prepare_analysis_panel(
         "output_panel_sha256": sha256_file(analysis_path),
         "years": years,
         "sectors": sectors,
+        "sector_scope": sector_label,
         "title_iv_flag": title_iv_flag,
         "input_rows": int(len(df)),
         "year_window_rows": int(len(year_filtered)),
@@ -1058,7 +1076,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--variable-config", default=str(DEFAULT_VARIABLE_CONFIG), help="Variable-selection CSV")
     p.add_argument("--output-dir", default="outputs/analysis_panel", help="Output directory")
     p.add_argument("--years", default="2009:2023", help='Analysis years, for example "2009:2023"')
-    p.add_argument("--sectors", default="1,2,3", help="Comma-separated SECTOR codes")
+    p.add_argument("--sectors", default=DEFAULT_MAIN_SECTORS_SPEC, help="Comma-separated SECTOR codes")
     p.add_argument("--title-iv-flag", type=int, default=1, help="Required PSET4FLG value")
     return p.parse_args()
 

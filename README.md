@@ -17,13 +17,15 @@ panel_clean_analysis_2004_2023.parquet
 dictionary_lake.parquet
 ```
 
-The default analysis sample is four-year Title IV institutions:
+The default analysis sample is four-year Title IV public and private nonprofit institutions:
 
 ```text
 PSET4FLG = 1
-SECTOR in (1, 2, 3)
+SECTOR in (1, 2)
 year = 2009:2023
 ```
+
+Private for-profit institutions are not part of the baseline sample. They can be built as a diagnostic sample by passing `--sectors 3`.
 
 The script does not modify the source panel. It writes a derived analysis parquet and audit tables under `outputs/`, which are ignored by Git.
 
@@ -70,7 +72,7 @@ python scripts/prepare_analysis_panel.py \
 
 The script writes:
 
-- `analysis_panel_coa_headroom_2009_2023.parquet`
+- `analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet`
 - `analysis_build_summary.json`
 - `analysis_variable_manifest.csv`
 - `analysis_sample_counts.csv`

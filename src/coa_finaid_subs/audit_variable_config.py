@@ -7,6 +7,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from coa_finaid_subs.prepare_analysis_panel import (
+    DEFAULT_MAIN_SECTORS_SPEC,
     DEFAULT_VARIABLE_CONFIG,
     HARMONIZED_NET_PRICE_DEFS,
     derive_metadata_flags,
@@ -237,7 +238,7 @@ def audit_variable_config(
     output_dir: Path,
     variable_config: Path = DEFAULT_VARIABLE_CONFIG,
     years_spec: str = "2009:2023",
-    sectors_spec: str = "1,2,3",
+    sectors_spec: str = DEFAULT_MAIN_SECTORS_SPEC,
     title_iv_flag: int = 1,
 ) -> dict[str, Path]:
     specs = load_variable_specs(variable_config)
@@ -289,7 +290,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--variable-config", default=str(DEFAULT_VARIABLE_CONFIG), help="Variable-selection CSV")
     p.add_argument("--output-dir", default="outputs/variable_audit", help="Output directory")
     p.add_argument("--years", default="2009:2023", help='Analysis years, for example "2009:2023"')
-    p.add_argument("--sectors", default="1,2,3", help="Comma-separated SECTOR codes")
+    p.add_argument("--sectors", default=DEFAULT_MAIN_SECTORS_SPEC, help="Comma-separated SECTOR codes")
     p.add_argument("--title-iv-flag", type=int, default=1, help="Required PSET4FLG value")
     return p.parse_args()
 

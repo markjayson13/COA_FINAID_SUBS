@@ -12,13 +12,15 @@ Source notes:
 
 ## Primary variables
 
-The main sample is four-year Title IV institutions from 2009 through 2023:
+The main sample is four-year Title IV public and private nonprofit institutions from 2009 through 2023:
 
 ```text
 PSET4FLG = 1
-SECTOR in (1, 2, 3)
+SECTOR in (1, 2)
 year = 2009:2023
 ```
+
+Private for-profit institutions are not part of the baseline sample. They can be built separately with `--sectors 3` for diagnostic or appendix checks.
 
 The primary headroom measures use the current tuition-and-fee, books, room-and-board, and other-expense fields:
 
@@ -72,7 +74,7 @@ Finance variables are sector-specific in IPEDS. The raw fields are kept for audi
 
 - public GASB fields: `F1*`
 - private nonprofit FASB fields: `F2*`
-- private for-profit fields: `F3*`
+- private for-profit fields: `F3*`, retained for diagnostic builds rather than the baseline sample
 
 The derived finance controls include tuition revenue, total revenue, total expenses, total assets, beginning endowment where reported, instruction expense, academic support expense, student services expense, and institutional support expense. Public state and local appropriations are kept as a public-sector measure because the same concept is not reported the same way in the private-sector forms.
 
@@ -88,12 +90,12 @@ With the local panel verified on June 8, 2026:
 
 - selected raw variables: 215
 - missing selected variables in the source panel: 0
-- main sample: 43,476 institution-years and 3,769 institutions
-- primary headroom, Pell, and institutional-grant complete cases: 28,989 institution-years and 2,885 institutions
-- primary plus FTFT totals and denominator: 30,996 institution-years and 3,009 institutions
-- all-undergraduate aid family: 36,758 institution-years and 3,212 institutions
-- sector-appropriate finance controls: 38,564 institution-years and 3,232 institutions
-- admissions/selectivity complete cases: 16,649 institution-years and 1,530 institutions
-- private raw `NPT*` net-price income-band complete cases: 15,175 institution-years and 1,744 institutions
-- sector-harmonized current net-price income-band complete cases: 23,510 institution-years and 2,517 institutions
-- any tracked IPEDS metadata exposure: 10,150 institution-years
+- main sample: 35,443 institution-years and 2,774 institutions
+- primary headroom, Pell, and institutional-grant complete cases: 25,023 institution-years and 2,200 institutions
+- primary plus FTFT totals and denominator: 26,051 institution-years and 2,247 institutions
+- all-undergraduate aid family: 29,520 institution-years and 2,302 institutions
+- sector-appropriate finance controls: 32,544 institution-years and 2,514 institutions
+- admissions/selectivity complete cases: 16,551 institution-years and 1,510 institutions
+- private raw `NPT*` net-price income-band complete cases: 12,969 institution-years and 1,209 institutions
+- sector-harmonized current net-price income-band complete cases: 21,304 institution-years and 1,983 institutions
+- any tracked IPEDS metadata exposure: 7,103 institution-years

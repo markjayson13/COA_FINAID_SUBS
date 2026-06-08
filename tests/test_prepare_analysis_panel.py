@@ -202,6 +202,7 @@ def panel_rows() -> list[dict]:
         {"year": 2009, "UNITID": 2, "PSET4FLG": 1, "SECTOR": 2, **base, "CONTROL": 2, "CHG2AY0": 12_000},
         {"year": 2009, "UNITID": 3, "PSET4FLG": 2, "SECTOR": 1, **base},
         {"year": 2009, "UNITID": 4, "PSET4FLG": 1, "SECTOR": 4, **base},
+        {"year": 2009, "UNITID": 6, "PSET4FLG": 1, "SECTOR": 3, **base, "CONTROL": 3, "CHG2AY0": 13_000},
         {"year": 2010, "UNITID": 5, "PSET4FLG": None, "SECTOR": None, **base},
     ]
 
@@ -285,7 +286,8 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     )
 
     assert summary["analysis_rows"] == 2
-    analysis_path = output_dir / "analysis_panel_coa_headroom_2009_2023.parquet"
+    assert summary["sector_scope"] == "public_private_nonprofit"
+    analysis_path = output_dir / "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet"
     out = pd.read_parquet(analysis_path)
     assert out["UNITID"].tolist() == [1, 2]
     assert "EXTRA_DROP" not in out.columns
@@ -332,7 +334,7 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert manifest.loc[manifest["varname"] == "NET_PRICE_0_30000", "group"].iloc[0] == "derived_net_price"
     assert manifest.loc[manifest["varname"] == "FLAG_IPEDS_SFA_IMPUTED", "group"].iloc[0] == "derived_metadata_flag"
     sample = pd.read_csv(output_dir / "analysis_sample_counts.csv")
-    assert int(sample.loc[sample["sample"] == "primary_four_year_titleiv", "rows"].iloc[0]) == 2
+    assert int(sample.loc[sample["sample"] == "analysis_four_year_titleiv_public_private_nonprofit", "rows"].iloc[0]) == 2
     metadata = pd.read_csv(output_dir / "analysis_metadata_flag_summary.csv")
     flagged = metadata[
         (metadata["scope"] == "overall")
@@ -356,6 +358,28 @@ def test_prepare_analysis_panel_fails_on_duplicate_unitid_year(tmp_path: Path) -
             output_dir=tmp_path / "outputs",
             variable_config=VARIABLE_CONFIG,
         )
+
+
+def test_prepare_analysis_panel_can_build_forprofit_diagnostic_sample(tmp_path: Path) -> None:
+    panel_path = tmp_path / "panel.parquet"
+    dictionary_path = tmp_path / "dictionary.parquet"
+    output_dir = tmp_path / "outputs"
+    write_parquet(panel_path, panel_rows())
+    write_parquet(dictionary_path, dictionary_rows())
+
+    summary = prepare_analysis_panel(
+        input_panel=panel_path,
+        dictionary=dictionary_path,
+        output_dir=output_dir,
+        variable_config=VARIABLE_CONFIG,
+        sectors_spec="3",
+    )
+
+    assert summary["analysis_rows"] == 1
+    assert summary["sector_scope"] == "private_forprofit_diagnostic"
+    analysis_path = output_dir / "analysis_panel_coa_headroom_2009_2023_private_forprofit_diagnostic.parquet"
+    out = pd.read_parquet(analysis_path)
+    assert out["UNITID"].tolist() == [6]
 
 
 def test_prepare_analysis_panel_accepts_string_coded_sample_fields(tmp_path: Path) -> None:
@@ -400,7 +424,10 @@ def test_audit_variable_config_writes_coverage_outputs(tmp_path: Path) -> None:
     metadata_codes = pd.read_csv(outputs["metadata_codes"])
     assert {"coverage", "groups", "complete_cases", "metadata_flags", "metadata_codes"} == set(outputs)
     assert coverage.loc[coverage["varname"] == "PGRNT_A", "coverage"].iloc[0] == 1.0
-    assert "primary_headroom_pell_institutional_avg" in set(complete_cases["scenario"])
+    primary_rows = complete_cases.loc[
+        complete_cases["scenario"] == "primary_headroom_pell_institutional_avg", "rows"
+    ].iloc[0]
+    assert int(primary_rows) == 2
     assert "net_price_current_income_bands_sector_appropriate" in set(complete_cases["scenario"])
     assert "FLAG_IPEDS_SFA_IMPUTED" in set(metadata_flags["flag"])
     assert "LOCK_SFA" in set(metadata_codes["varname"])

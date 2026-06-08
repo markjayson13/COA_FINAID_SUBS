@@ -7,7 +7,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from coa_finaid_subs.audit_extremes import audit_extremes
 from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
+from coa_finaid_subs.descstat_tables import build_descstat_tables
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
 
@@ -216,6 +218,11 @@ def panel_rows() -> list[dict]:
             "SATMT75": 540,
             "ACTCM25": 17,
             "ACTCM75": 23,
+            "PGRNT_T": 0,
+            "OLOAN_A": 0,
+            "OLOAN_N": 0,
+            "OLOAN_P": 0,
+            "OLOAN_T": 0,
         },
         {"year": 2009, "UNITID": 3, "PSET4FLG": 2, "SECTOR": 1, **base},
         {"year": 2009, "UNITID": 4, "PSET4FLG": 1, "SECTOR": 4, **base},
@@ -400,6 +407,16 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert selective_panel["UNITID"].tolist() == [1, 2]
     selectivity_summary = pd.read_csv(scoped_output_dir / "analysis_selectivity_summary.csv")
     assert {"highly_selective", "moderately_selective"} <= set(selectivity_summary["selectivity_category"])
+    aid_zero = pd.read_csv(scoped_output_dir / "analysis_aid_zero_consistency.csv")
+    pgrnt_zero = aid_zero[(aid_zero["scope"] == "overall") & (aid_zero["aid_family"] == "PGRNT")].iloc[0]
+    assert int(pgrnt_zero["suspect_zero_rows"]) == 1
+    assert int(pgrnt_zero["suspect_zero_total_rows"]) == 1
+    oloan_zero = aid_zero[(aid_zero["scope"] == "overall") & (aid_zero["aid_family"] == "OLOAN")].iloc[0]
+    assert int(oloan_zero["true_zero_rows"]) == 1
+    suspect_rows = pd.read_csv(scoped_output_dir / "analysis_aid_zero_suspect_rows.csv")
+    suspect_pgrnt = suspect_rows[(suspect_rows["UNITID"] == 2) & (suspect_rows["aid_family"] == "PGRNT")].iloc[0]
+    assert bool(suspect_pgrnt["suspect_zero_total"]) is True
+    assert "suspect_zero_total" in suspect_pgrnt["issue_reason"]
     assert summary["selective_admissions_robustness_rows"] == 2
     assert {
         "panel_balance_by_institution",
@@ -409,6 +426,8 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
         "institution_years_by_sector_year",
         "min_years_sensitivity",
         "selectivity_summary",
+        "aid_zero_consistency",
+        "aid_zero_suspect_rows",
     } <= set(summary["artifacts"])
 
 
@@ -595,6 +614,42 @@ def test_prepare_analysis_panel_accepts_string_coded_sample_fields(tmp_path: Pat
     assert summary["analysis_rows"] == 2
 
 
+def test_audit_extremes_profiles_shape_types_and_extreme_rows(tmp_path: Path) -> None:
+    panel_path = tmp_path / "analysis.parquet"
+    rows = [
+        {"year": 2009, "UNITID": 1, "INSTNM": "A", "SECTOR": 1, "CONTROL": 1, "PGRNT_T": 100, "HEADROOM_ON": 9_000, "FLAG": True},
+        {"year": 2009, "UNITID": 2, "INSTNM": "B", "SECTOR": 1, "CONTROL": 1, "PGRNT_T": 200, "HEADROOM_ON": 10_000, "FLAG": False},
+        {"year": 2010, "UNITID": 1, "INSTNM": "A", "SECTOR": 1, "CONTROL": 1, "PGRNT_T": 300, "HEADROOM_ON": 11_000, "FLAG": True},
+        {"year": 2010, "UNITID": 3, "INSTNM": "C", "SECTOR": 2, "CONTROL": 2, "PGRNT_T": 99_999, "HEADROOM_ON": -10, "FLAG": False},
+    ]
+    write_parquet(panel_path, rows)
+
+    paths = audit_extremes(panel_path, tmp_path / "extreme_audit", scope_label="test_scope", top_n=2)
+
+    shape = pd.read_csv(paths["dataset_shape"])
+    assert int(shape["rows"].iloc[0]) == 4
+    assert int(shape["columns"].iloc[0]) == 8
+    assert int(shape["duplicate_unitid_year_rows"].iloc[0]) == 0
+
+    profile = pd.read_csv(paths["variable_profile"])
+    pgrnt = profile[profile["varname"] == "PGRNT_T"].iloc[0]
+    assert pgrnt["logical_type"] == "numeric"
+    assert pgrnt["variable_group"] == "ftft_aid"
+    assert int(pgrnt["max"]) == 99_999
+    headroom = profile[profile["varname"] == "HEADROOM_ON"].iloc[0]
+    assert int(headroom["negative_count"]) == 1
+
+    candidates = pd.read_csv(paths["review_candidates"])
+    assert "HEADROOM_ON" in set(candidates["varname"])
+    extremes = pd.read_csv(paths["extreme_rows"])
+    high_pgrnt = extremes[(extremes["varname"] == "PGRNT_T") & (extremes["direction"] == "high")].iloc[0]
+    assert int(high_pgrnt["UNITID"]) == 3
+    by_year = pd.read_csv(paths["year_distribution"])
+    assert {2009, 2010} <= set(by_year["year"])
+    categorical = pd.read_csv(paths["categorical_profile"])
+    assert "INSTNM" in set(categorical["varname"])
+
+
 def test_audit_variable_config_writes_coverage_outputs(tmp_path: Path) -> None:
     panel_path = tmp_path / "panel.parquet"
     output_dir = tmp_path / "audit"
@@ -639,3 +694,59 @@ def test_audit_variable_outputs_writes_default_sector_audits(tmp_path: Path) -> 
     private_cases = pd.read_csv(outputs["private_nonprofit"]["complete_cases"])
     assert int(public_cases.loc[public_cases["scenario"] == "primary_headroom_pell_institutional_avg", "rows"].iloc[0]) == 1
     assert int(private_cases.loc[private_cases["scenario"] == "primary_headroom_pell_institutional_avg", "rows"].iloc[0]) == 1
+
+
+def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> None:
+    panel_path = tmp_path / "analysis.parquet"
+    config_path = tmp_path / "descstat_variables.csv"
+    output_dir = tmp_path / "descstats"
+    rows = [
+        {"year": 2009, "UNITID": 1, "COA_OFF_NF": 10_000, "HEADROOM_SHARE_OFF_NF": 0.40},
+        {"year": 2009, "UNITID": 2, "COA_OFF_NF": 12_000, "HEADROOM_SHARE_OFF_NF": 0.45},
+        {"year": 2010, "UNITID": 1, "COA_OFF_NF": 13_000, "HEADROOM_SHARE_OFF_NF": 0.50},
+        {"year": 2010, "UNITID": 2, "COA_OFF_NF": 1_000_000, "HEADROOM_SHARE_OFF_NF": 0.55},
+    ]
+    write_parquet(panel_path, rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "varname,label,section,units,winsorize,winsor_lower,winsor_upper,include_paper,include_appendix",
+                "COA_OFF_NF,Cost of attendance,Cost of attendance,dollars,true,0.25,0.75,true,true",
+                "HEADROOM_SHARE_OFF_NF,Headroom share,Cost of attendance,share,false,,,true,true",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = build_descstat_tables(
+        input_panel=panel_path,
+        output_dir=output_dir,
+        config=config_path,
+        scope_label="test_scope",
+    )
+
+    assert set(paths) == {
+        "full_descstat",
+        "paper_csv",
+        "paper_tex",
+        "appendix_csv",
+        "appendix_tex",
+        "summary",
+    }
+    for path in paths.values():
+        assert path.exists()
+
+    full = pd.read_csv(paths["full_descstat"])
+    coa = full[full["varname"] == "COA_OFF_NF"].iloc[0]
+    assert bool(coa["present"]) is True
+    assert int(coa["n"]) == 4
+    assert int(coa["capped_high"]) == 1
+    assert int(coa["capped_low"]) == 1
+    assert coa["winsor_mean"] < coa["raw_mean"]
+
+    paper = pd.read_csv(paths["paper_csv"])
+    appendix = pd.read_csv(paths["appendix_csv"])
+    assert paper["Variable"].tolist() == ["Cost of attendance", "Headroom share"]
+    assert "Rows capped" in paper.columns
+    assert {"p1", "p99", "Lower cap", "Upper cap"} <= set(appendix.columns)

@@ -57,7 +57,10 @@ Before writing the analysis panel, the script checks:
 - retention under minimum observed-year requirements
 - open-admissions status as the baseline admissions control
 - a separate selective-admissions robustness panel for admit-rate and test-score measures
+- documented exclusion of ordinary enrollment and race-share controls with unusable local coverage
 - nonnegative checks for core COA and aid money variables
+- aid-zero consistency checks across counts, percentages, averages, and totals
+- all-variable distribution and extreme-value audit before any winsorization decision
 - raw net-price values retained
 - negative net-price values flagged and copied to cleaned fields with negatives set missing
 - raw IPEDS imputation, revision, collection-status, and parent-child fields retained where available
@@ -68,9 +71,15 @@ The selected variable file is also auditable against the source panel. The audit
 
 Admissions variables are handled in two layers. `OPENADMP` is kept in the baseline. Admit rates, yield, SAT score ranges, and ACT score ranges are derived in the analysis panel but are assigned to the selective-admissions robustness sample, not the main sample definition.
 
+Ordinary enrollment and race-share controls are not used in the current baseline. The local clean panel does not provide usable coverage for `ENRTOT`, `FTE`, or the `PCTENR*` race-share family in this analysis sample. I keep the student-body controls to fields with usable coverage in the current extract, mainly SFA cohort counts and institutional flags. If the upstream panel later restores ordinary enrollment and race-share coverage, those controls should enter as a documented sensitivity, not as an undocumented change to the baseline.
+
 The metadata fields are kept in two forms. The raw `IMP_*`, `LOCK_*`, `REV_*`, `IDX_*`, `PRCH_*`, and parent-child allocation fields remain in the extract. The script also writes conservative derived flags. A component is flagged as imputed when its `IMP_*` code is neither the baseline reported code nor the not-applicable code. It is flagged as revised when `REV_*` equals one. It is flagged as parent-linked when IPEDS reports a parent `UNITID` in `IDX_*` or a positive parent-child allocation factor. The audit also writes raw code counts for `IMP_*`, `LOCK_*`, `REV_*`, and `PRCH_*` fields.
 
 The entry and exit tables use first and last observed years within this research window. They do not, by themselves, prove that an institution opened or closed. An institution first observed after 2009 may be a true entrant, a campus that became eligible for this sample, or a record whose reporting status changed. An institution last observed before 2023 may have closed, merged, changed sector, left Title IV, or stopped meeting the four-year sample rule.
+
+Outlier handling is audit-first. The repository now writes all-variable distribution profiles and review-candidate tables, but it does not winsorize the panel by default. Any cap, trim, or transformation rule should be added later as a named sensitivity with a variable-level reason.
+
+The descriptive-statistics table uses limited winsorization for display only. The cap rules live in `config/descstat_variables.csv`, and the table builder writes raw and capped means side by side. This does not alter the analysis parquet and does not make winsorization part of the baseline estimating sample.
 
 ## Generated files
 

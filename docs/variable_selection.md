@@ -55,7 +55,11 @@ Institutional controls include size, Carnegie classification, degree-granting st
 
 Admissions controls are split by use. `OPENADMP` is part of the baseline control set. Applications, admissions, enrolled students, SAT percentiles, ACT percentiles, and test-submission shares are reserved for the selective-admissions robustness sample because IPEDS admissions data are collected for institutions without open admissions policies.
 
-Scale controls use the SFA cohort fields because the ordinary enrollment totals in this local clean panel are present in the schema but empty for the analysis sample. The useful fields are `SCUGRAD`, `SCUGFFN`, `SCUGFFP`, `SCFA1N`, and `SCFA2`.
+Scale controls use the SFA cohort fields because ordinary enrollment coverage is not usable in this local clean panel for the analysis sample. The useful fields are `SCUGRAD`, `SCUGFFN`, `SCUGFFP`, `SCFA1N`, and `SCFA2`.
+
+I do not use `ENRTOT`, `FTE`, or the `PCTENR*` race-share family in the current baseline. Those fields are either absent from the public variable contract or do not have enough usable coverage in the verified local panel. This is a data limitation, not a modeling preference. If ordinary enrollment and race-share coverage are recovered in the upstream panel, they should be added through a separate documented sensitivity.
+
+Aid zeros are audited but not filtered. The build writes `analysis_aid_zero_consistency.csv` and `analysis_aid_zero_suspect_rows.csv` to separate rows where aid counts, percentages, averages, and totals all support a true zero from rows where a zero total conflicts with positive count, percent, or average signals.
 
 ## IPEDS metadata fields
 
@@ -101,6 +105,7 @@ With the local panel verified on June 8, 2026:
 - sector-appropriate finance controls: 32,544 institution-years and 2,514 institutions
 - selective-admissions admit-rate and yield checks: 24,732 institution-years and 1,926 institutions
 - selective-admissions robustness index inputs: 18,813 institution-years and 1,599 institutions
+- ordinary enrollment and race-share controls based on `ENRTOT`, `FTE`, or `PCTENR*`: not used in baseline because verified local coverage is not usable
 - private raw `NPT*` net-price income-band complete cases: 12,969 institution-years and 1,209 institutions
 - sector-harmonized current net-price income-band complete cases: 21,304 institution-years and 1,983 institutions
 - any tracked IPEDS metadata exposure: 7,103 institution-years

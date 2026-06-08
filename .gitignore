@@ -1,5 +1,6 @@
 __pycache__/
 .pytest_cache/
+.ipynb_checkpoints/
 .venv/
 venv/
 .DS_Store
@@ -15,4 +16,3 @@ tmp/
 *.duckdb
 *.duckdb.wal
 *.log
-

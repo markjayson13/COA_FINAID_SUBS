@@ -1,0 +1,30 @@
+varname,label,section,units,winsorize,winsor_lower,winsor_upper,include_paper,include_appendix
+COA_OFF_NF,Cost of attendance: off campus not with family,Cost of attendance,dollars,true,0.01,0.99,true,true
+HEADROOM_OFF_NF,Non-tuition COA headroom: off campus not with family,Cost of attendance,dollars,true,0.01,0.99,true,true
+HEADROOM_SHARE_OFF_NF,Non-tuition COA headroom share: off campus not with family,Cost of attendance,share,false,,,true,true
+PGRNT_T,Total Pell grant dollars: FTFT students,Aid outcomes,dollars,true,0.01,0.99,true,true
+IGRNT_T,Total institutional grant dollars: FTFT students,Aid outcomes,dollars,true,0.01,0.99,true,true
+PGRNT_PER_FTFT_COHORT,Pell dollars per FTFT SFA cohort student,Aid outcomes,dollars_per_student,true,0.01,0.99,true,true
+IGRNT_PER_FTFT_COHORT,Institutional grant dollars per FTFT SFA cohort student,Aid outcomes,dollars_per_student,true,0.01,0.99,true,true
+PELL_SHARE_OF_TOTAL_GRANT_FTFT,Pell share of FTFT grant dollars,Aid outcomes,share,false,,,true,true
+INST_GRANT_SHARE_OF_TOTAL_GRANT_FTFT,Institutional grant share of FTFT grant dollars,Aid outcomes,share,false,,,true,true
+FLOAN_PER_FTFT_COHORT,Federal loan dollars per FTFT SFA cohort student,Aid outcomes,dollars_per_student,true,0.01,0.99,false,true
+SCFA1N,FTFT SFA cohort count,Scale controls,count,true,0.01,0.99,true,true
+SCUGRAD,Undergraduate SFA cohort count,Scale controls,count,true,0.01,0.99,true,true
+LN_SCFA1N,Log FTFT SFA cohort count,Scale controls,log,false,,,false,true
+LN_SCUGRAD,Log undergraduate SFA cohort count,Scale controls,log,false,,,false,true
+FIN_TOTAL_REVENUE,Total revenue,Finance controls,dollars,true,0.01,0.99,true,true
+FIN_TOTAL_EXPENSES,Total expenses,Finance controls,dollars,true,0.01,0.99,true,true
+FIN_TOTAL_ASSETS,Total assets,Finance controls,dollars,true,0.01,0.99,true,true
+FIN_TUITION_REVENUE,Tuition revenue,Finance controls,dollars,true,0.01,0.99,false,true
+LN_FIN_TOTAL_REVENUE,Log total revenue,Finance controls,log,false,,,false,true
+LN_FIN_TOTAL_EXPENSES,Log total expenses,Finance controls,log,false,,,false,true
+LN_FIN_TOTAL_ASSETS,Log total assets,Finance controls,log,false,,,false,true
+FIN_STATE_LOCAL_APPROPS_PUBLIC,Public state and local appropriations and grants,Finance controls,dollars,true,0.01,0.99,false,true
+ADMIT_RATE,Admit rate: non-open admissions,Admissions and selectivity,share,false,,,false,true
+SELECTIVITY_INDEX,Selectivity index: robustness sample,Admissions and selectivity,index,false,,,false,true
+NET_PRICE_0_30000_CLEAN,Net price: income 0-30000,Net price diagnostics,dollars,true,0.01,0.99,false,true
+NET_PRICE_30001_48000_CLEAN,Net price: income 30001-48000,Net price diagnostics,dollars,true,0.01,0.99,false,true
+NET_PRICE_48001_75000_CLEAN,Net price: income 48001-75000,Net price diagnostics,dollars,true,0.01,0.99,false,true
+NET_PRICE_75001_110000_CLEAN,Net price: income 75001-110000,Net price diagnostics,dollars,true,0.01,0.99,false,true
+NET_PRICE_OVER_110000_CLEAN,Net price: income over 110000,Net price diagnostics,dollars,true,0.01,0.99,false,true

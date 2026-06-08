@@ -235,6 +235,20 @@ METADATA_COMPONENTS = {
     "E12": {"imp": "IMP_E12", "lock": "LOCK_E12", "rev": "REV_E12", "idx": "IDX_E12", "prch": "PRCH_E12", "pc": "PCE12_F"},
     "ADM": {"imp": "IMP_ADM", "lock": "LOCK_ADM", "rev": "REV_ADM", "idx": "IDX_ADM", "prch": "PRCH_ADM", "pc": "PCADM_F"},
 }
+AID_ZERO_AUDIT_SPECS = (
+    ("ftft", "AGRNT", "total grant", "AGRNT_A", "AGRNT_N", "AGRNT_P", "AGRNT_T", "SCFA1N"),
+    ("ftft", "FGRNT", "federal grant", "FGRNT_A", "FGRNT_N", "FGRNT_P", "FGRNT_T", "SCFA1N"),
+    ("ftft", "PGRNT", "Pell grant", "PGRNT_A", "PGRNT_N", "PGRNT_P", "PGRNT_T", "SCFA1N"),
+    ("ftft", "SGRNT", "state and local grant", "SGRNT_A", "SGRNT_N", "SGRNT_P", "SGRNT_T", "SCFA1N"),
+    ("ftft", "OFGRT", "other federal grant", "OFGRT_A", "OFGRT_N", "OFGRT_P", "OFGRT_T", "SCFA1N"),
+    ("ftft", "IGRNT", "institutional grant", "IGRNT_A", "IGRNT_N", "IGRNT_P", "IGRNT_T", "SCFA1N"),
+    ("ftft", "LOAN", "student loan", "LOAN_A", "LOAN_N", "LOAN_P", "LOAN_T", "SCFA1N"),
+    ("ftft", "FLOAN", "federal loan", "FLOAN_A", "FLOAN_N", "FLOAN_P", "FLOAN_T", "SCFA1N"),
+    ("ftft", "OLOAN", "other loan", "OLOAN_A", "OLOAN_N", "OLOAN_P", "OLOAN_T", "SCFA1N"),
+    ("undergraduate", "UAGRNT", "undergraduate grant", "UAGRNTA", "UAGRNTN", "UAGRNTP", "UAGRNTT", "SCUGRAD"),
+    ("undergraduate", "UFLOAN", "undergraduate federal loan", "UFLOANA", "UFLOANN", "UFLOANP", "UFLOANT", "SCUGRAD"),
+    ("undergraduate", "UPGRNT", "undergraduate Pell", "UPGRNTA", "UPGRNTN", "UPGRNTP", "UPGRNTT", "SCUGRAD"),
+)
 
 
 @dataclass(frozen=True)
@@ -1301,6 +1315,231 @@ def value_sanity(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def numeric_or_na(df: pd.DataFrame, col: str) -> pd.Series:
+    if col in df.columns:
+        return pd.to_numeric(df[col], errors="coerce")
+    return pd.Series(pd.NA, index=df.index, dtype="Float64")
+
+
+def aid_zero_consistency_rows(df: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "year",
+        "UNITID",
+        "INSTNM",
+        "sector",
+        "aid_scope",
+        "aid_family",
+        "aid_label",
+        "average_var",
+        "count_var",
+        "percent_var",
+        "total_var",
+        "denominator_var",
+        "average_value",
+        "count_value",
+        "percent_value",
+        "total_value",
+        "denominator_value",
+        "expected_percent",
+        "percent_gap",
+        "expected_total_from_average",
+        "total_gap",
+        "true_zero",
+        "positive_consistent",
+        "suspect_zero_total",
+        "suspect_zero_count",
+        "suspect_zero_percent",
+        "suspect_zero_average",
+        "count_percent_mismatch",
+        "total_average_count_mismatch",
+        "any_issue",
+        "issue_reason",
+    ]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    out_rows: list[pd.DataFrame] = []
+    sector = df["SECTOR"].map(sector_name) if "SECTOR" in df.columns else pd.Series("all", index=df.index)
+    instnm = df["INSTNM"] if "INSTNM" in df.columns else pd.Series("", index=df.index)
+    year = df["year"] if "year" in df.columns else pd.Series(pd.NA, index=df.index)
+    unitid = df["UNITID"] if "UNITID" in df.columns else pd.Series(pd.NA, index=df.index)
+
+    for aid_scope, family, label, avg_col, count_col, pct_col, total_col, denom_col in AID_ZERO_AUDIT_SPECS:
+        avg = numeric_or_na(df, avg_col)
+        count = numeric_or_na(df, count_col)
+        pct = numeric_or_na(df, pct_col)
+        total = numeric_or_na(df, total_col)
+        denom = numeric_or_na(df, denom_col)
+        any_observed = avg.notna() | count.notna() | pct.notna() | total.notna()
+
+        true_zero = (
+            any_observed
+            & count.fillna(0).eq(0)
+            & pct.fillna(0).eq(0)
+            & total.fillna(0).eq(0)
+            & (avg.isna() | avg.eq(0))
+        ).fillna(False).astype(bool)
+        suspect_zero_total = (total.eq(0) & (count.gt(0) | pct.gt(0) | avg.gt(0))).fillna(False).astype(bool)
+        suspect_zero_count = (count.eq(0) & (total.gt(0) | avg.gt(0))).fillna(False).astype(bool)
+        suspect_zero_percent = (pct.eq(0) & (count.gt(0) | total.gt(0))).fillna(False).astype(bool)
+        suspect_zero_average = (avg.eq(0) & (count.gt(0) | total.gt(0))).fillna(False).astype(bool)
+
+        expected_pct = count / denom.where(denom != 0) * 100
+        pct_gap = pct - expected_pct
+        count_percent_mismatch = (
+            count.notna() & pct.notna() & denom.gt(0) & pct_gap.abs().gt(1.0)
+        ).fillna(False).astype(bool)
+
+        expected_total = avg * count
+        total_gap = total - expected_total
+        total_tolerance = pd.concat(
+            [count.abs() * 0.51, total.abs() * 0.01, pd.Series(1.0, index=df.index)],
+            axis=1,
+        ).max(axis=1)
+        total_average_count_mismatch = (
+            total.notna()
+            & avg.notna()
+            & count.gt(0)
+            & expected_total.notna()
+            & total_gap.abs().gt(total_tolerance)
+        ).fillna(False).astype(bool)
+
+        any_issue = (
+            suspect_zero_total
+            | suspect_zero_count
+            | suspect_zero_percent
+            | suspect_zero_average
+            | count_percent_mismatch
+            | total_average_count_mismatch
+        )
+        positive_signal = (avg.gt(0) | count.gt(0) | pct.gt(0) | total.gt(0)).fillna(False).astype(bool)
+        positive_consistent = (any_observed & ~true_zero & positive_signal & ~any_issue).fillna(False).astype(bool)
+
+        issue_parts = pd.DataFrame(
+            {
+                "suspect_zero_total": suspect_zero_total,
+                "suspect_zero_count": suspect_zero_count,
+                "suspect_zero_percent": suspect_zero_percent,
+                "suspect_zero_average": suspect_zero_average,
+                "count_percent_mismatch": count_percent_mismatch,
+                "total_average_count_mismatch": total_average_count_mismatch,
+            },
+            index=df.index,
+        )
+        issue_reason = issue_parts.apply(lambda row: ";".join(name for name, value in row.items() if bool(value)), axis=1)
+
+        out_rows.append(
+            pd.DataFrame(
+                {
+                    "year": year,
+                    "UNITID": unitid,
+                    "INSTNM": instnm,
+                    "sector": sector,
+                    "aid_scope": aid_scope,
+                    "aid_family": family,
+                    "aid_label": label,
+                    "average_var": avg_col,
+                    "count_var": count_col,
+                    "percent_var": pct_col,
+                    "total_var": total_col,
+                    "denominator_var": denom_col,
+                    "average_value": avg,
+                    "count_value": count,
+                    "percent_value": pct,
+                    "total_value": total,
+                    "denominator_value": denom,
+                    "expected_percent": expected_pct,
+                    "percent_gap": pct_gap,
+                    "expected_total_from_average": expected_total,
+                    "total_gap": total_gap,
+                    "true_zero": true_zero,
+                    "positive_consistent": positive_consistent,
+                    "suspect_zero_total": suspect_zero_total,
+                    "suspect_zero_count": suspect_zero_count,
+                    "suspect_zero_percent": suspect_zero_percent,
+                    "suspect_zero_average": suspect_zero_average,
+                    "count_percent_mismatch": count_percent_mismatch,
+                    "total_average_count_mismatch": total_average_count_mismatch,
+                    "any_issue": any_issue,
+                    "issue_reason": issue_reason.where(any_issue, ""),
+                },
+                index=df.index,
+            )
+        )
+
+    return pd.concat(out_rows, ignore_index=True)[columns]
+
+
+def aid_zero_consistency_summary(rows: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "scope",
+        "scope_value",
+        "aid_scope",
+        "aid_family",
+        "aid_label",
+        "rows",
+        "true_zero_rows",
+        "positive_consistent_rows",
+        "suspect_zero_rows",
+        "suspect_zero_total_rows",
+        "suspect_zero_count_rows",
+        "suspect_zero_percent_rows",
+        "suspect_zero_average_rows",
+        "count_percent_mismatch_rows",
+        "total_average_count_mismatch_rows",
+        "issue_share",
+    ]
+    if rows.empty:
+        return pd.DataFrame(columns=columns)
+
+    summary_rows: list[dict[str, object]] = []
+
+    def add_group(scope: str, scope_value: object, group: pd.DataFrame) -> None:
+        for (aid_scope, family, label), sub in group.groupby(
+            ["aid_scope", "aid_family", "aid_label"],
+            dropna=False,
+            sort=True,
+        ):
+            total_rows = int(len(sub))
+            suspect_zero = sub[
+                [
+                    "suspect_zero_total",
+                    "suspect_zero_count",
+                    "suspect_zero_percent",
+                    "suspect_zero_average",
+                ]
+            ].any(axis=1)
+            summary_rows.append(
+                {
+                    "scope": scope,
+                    "scope_value": scope_value,
+                    "aid_scope": aid_scope,
+                    "aid_family": family,
+                    "aid_label": label,
+                    "rows": total_rows,
+                    "true_zero_rows": int(sub["true_zero"].fillna(False).astype(bool).sum()),
+                    "positive_consistent_rows": int(sub["positive_consistent"].fillna(False).astype(bool).sum()),
+                    "suspect_zero_rows": int(suspect_zero.sum()),
+                    "suspect_zero_total_rows": int(sub["suspect_zero_total"].fillna(False).astype(bool).sum()),
+                    "suspect_zero_count_rows": int(sub["suspect_zero_count"].fillna(False).astype(bool).sum()),
+                    "suspect_zero_percent_rows": int(sub["suspect_zero_percent"].fillna(False).astype(bool).sum()),
+                    "suspect_zero_average_rows": int(sub["suspect_zero_average"].fillna(False).astype(bool).sum()),
+                    "count_percent_mismatch_rows": int(sub["count_percent_mismatch"].fillna(False).astype(bool).sum()),
+                    "total_average_count_mismatch_rows": int(sub["total_average_count_mismatch"].fillna(False).astype(bool).sum()),
+                    "issue_share": float(sub["any_issue"].fillna(False).astype(bool).mean()) if total_rows else 0.0,
+                }
+            )
+
+    add_group("overall", "all", rows)
+    if "year" in rows.columns:
+        for year, group in rows.groupby("year", dropna=False):
+            add_group("year", year, group)
+    if "sector" in rows.columns:
+        for sector, group in rows.groupby("sector", dropna=False):
+            add_group("sector", sector, group)
+    return pd.DataFrame(summary_rows, columns=columns)
+
+
 def metadata_flag_summary(df: pd.DataFrame) -> pd.DataFrame:
     flag_cols = [col for col in df.columns if col.startswith("FLAG_IPEDS_")]
     rows: list[dict[str, object]] = []
@@ -1695,6 +1934,8 @@ def prepare_analysis_panel(
     selectivity_summary_path = output_dir / "analysis_selectivity_summary.csv"
     missingness_path = output_dir / "analysis_missingness_by_year.csv"
     value_sanity_path = output_dir / "analysis_value_sanity.csv"
+    aid_zero_consistency_path = output_dir / "analysis_aid_zero_consistency.csv"
+    aid_zero_suspect_path = output_dir / "analysis_aid_zero_suspect_rows.csv"
     metadata_summary_path = output_dir / "analysis_metadata_flag_summary.csv"
     metadata_code_path = output_dir / "analysis_metadata_code_summary.csv"
     summary_path = output_dir / "analysis_build_summary.json"
@@ -1715,6 +1956,17 @@ def prepare_analysis_panel(
     selectivity_summary(analysis).to_csv(selectivity_summary_path, index=False)
     missingness_by_year(analysis).to_csv(missingness_path, index=False)
     value_sanity(analysis).to_csv(value_sanity_path, index=False)
+    aid_zero_rows = aid_zero_consistency_rows(analysis)
+    aid_zero_consistency_summary(aid_zero_rows).to_csv(aid_zero_consistency_path, index=False)
+    zero_suspect_mask = aid_zero_rows[
+        [
+            "suspect_zero_total",
+            "suspect_zero_count",
+            "suspect_zero_percent",
+            "suspect_zero_average",
+        ]
+    ].any(axis=1)
+    aid_zero_rows[zero_suspect_mask].to_csv(aid_zero_suspect_path, index=False)
     metadata_flag_summary(analysis).to_csv(metadata_summary_path, index=False)
     metadata_code_summary(analysis).to_csv(metadata_code_path, index=False)
 
@@ -1762,6 +2014,8 @@ def prepare_analysis_panel(
             "selectivity_summary": str(selectivity_summary_path),
             "missingness_by_year": str(missingness_path),
             "value_sanity": str(value_sanity_path),
+            "aid_zero_consistency": str(aid_zero_consistency_path),
+            "aid_zero_suspect_rows": str(aid_zero_suspect_path),
             "metadata_flag_summary": str(metadata_summary_path),
             "metadata_code_summary": str(metadata_code_path),
         },

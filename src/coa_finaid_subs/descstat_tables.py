@@ -1,0 +1,360 @@
+from __future__ import annotations
+
+import argparse
+import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pandas as pd
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DESCSTAT_CONFIG = REPO_ROOT / "config" / "descstat_variables.csv"
+DEFAULT_PANEL = (
+    REPO_ROOT
+    / "outputs"
+    / "analysis_panel"
+    / "public_private_nonprofit"
+    / "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet"
+)
+
+
+@dataclass(frozen=True)
+class DescstatSpec:
+    varname: str
+    label: str
+    section: str
+    units: str
+    winsorize: bool
+    winsor_lower: float | None
+    winsor_upper: float | None
+    include_paper: bool
+    include_appendix: bool
+
+
+def parse_bool(value: object) -> bool:
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "y"}
+
+
+def parse_optional_float(value: object) -> float | None:
+    if pd.isna(value) or str(value).strip() == "":
+        return None
+    return float(value)
+
+
+def load_descstat_specs(path: Path = DEFAULT_DESCSTAT_CONFIG) -> list[DescstatSpec]:
+    if not path.exists():
+        raise FileNotFoundError(f"Descriptive-statistics config not found: {path}")
+    df = pd.read_csv(path)
+    required = {
+        "varname",
+        "label",
+        "section",
+        "units",
+        "winsorize",
+        "winsor_lower",
+        "winsor_upper",
+        "include_paper",
+        "include_appendix",
+    }
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Descriptive-statistics config is missing columns: {', '.join(sorted(missing))}")
+
+    specs: list[DescstatSpec] = []
+    seen: set[str] = set()
+    for row in df.to_dict("records"):
+        varname = str(row["varname"]).strip()
+        if not varname:
+            continue
+        key = varname.upper()
+        if key in seen:
+            raise ValueError(f"Duplicate descriptive-statistics variable: {varname}")
+        seen.add(key)
+        lower = parse_optional_float(row["winsor_lower"])
+        upper = parse_optional_float(row["winsor_upper"])
+        winsorize = parse_bool(row["winsorize"])
+        if winsorize and (lower is None or upper is None or not 0 <= lower < upper <= 1):
+            raise ValueError(f"Invalid winsorization bounds for {varname}")
+        specs.append(
+            DescstatSpec(
+                varname=varname,
+                label=str(row["label"]).strip(),
+                section=str(row["section"]).strip(),
+                units=str(row["units"]).strip(),
+                winsorize=winsorize,
+                winsor_lower=lower,
+                winsor_upper=upper,
+                include_paper=parse_bool(row["include_paper"]),
+                include_appendix=parse_bool(row["include_appendix"]),
+            )
+        )
+    return specs
+
+
+def winsorize_series(series: pd.Series, lower: float | None, upper: float | None) -> tuple[pd.Series, float | None, float | None, int, int]:
+    numeric = pd.to_numeric(series, errors="coerce")
+    nonnull = numeric.dropna()
+    if nonnull.empty or lower is None or upper is None:
+        return numeric, None, None, 0, 0
+    lower_cap = float(nonnull.quantile(lower))
+    upper_cap = float(nonnull.quantile(upper))
+    winsorized = numeric.clip(lower=lower_cap, upper=upper_cap)
+    return (
+        winsorized,
+        lower_cap,
+        upper_cap,
+        int(numeric.lt(lower_cap).sum()),
+        int(numeric.gt(upper_cap).sum()),
+    )
+
+
+def summarize_variable(df: pd.DataFrame, spec: DescstatSpec, order: int) -> dict[str, object]:
+    if spec.varname not in df.columns:
+        return {
+            "order": order,
+            "section": spec.section,
+            "varname": spec.varname,
+            "label": spec.label,
+            "units": spec.units,
+            "present": False,
+        }
+
+    raw = pd.to_numeric(df[spec.varname], errors="coerce")
+    winsorized, lower_cap, upper_cap, capped_low, capped_high = winsorize_series(
+        raw,
+        spec.winsor_lower if spec.winsorize else None,
+        spec.winsor_upper if spec.winsorize else None,
+    )
+    nonnull = raw.dropna()
+    quantiles = nonnull.quantile([0.01, 0.25, 0.5, 0.75, 0.99]) if not nonnull.empty else pd.Series(dtype="Float64")
+
+    def value_or_none(series: pd.Series, method: str) -> float | None:
+        clean = series.dropna()
+        if clean.empty:
+            return None
+        return float(getattr(clean, method)())
+
+    return {
+        "order": order,
+        "section": spec.section,
+        "varname": spec.varname,
+        "label": spec.label,
+        "units": spec.units,
+        "present": True,
+        "winsorized": spec.winsorize,
+        "winsor_lower_quantile": spec.winsor_lower,
+        "winsor_upper_quantile": spec.winsor_upper,
+        "winsor_lower_cap": lower_cap,
+        "winsor_upper_cap": upper_cap,
+        "n": int(nonnull.count()),
+        "missing": int(raw.isna().sum()),
+        "missing_share": float(raw.isna().mean()) if len(raw) else 0.0,
+        "raw_mean": value_or_none(raw, "mean"),
+        "raw_sd": value_or_none(raw, "std"),
+        "raw_min": value_or_none(raw, "min"),
+        "raw_p01": None if quantiles.empty else float(quantiles.loc[0.01]),
+        "raw_p25": None if quantiles.empty else float(quantiles.loc[0.25]),
+        "raw_p50": None if quantiles.empty else float(quantiles.loc[0.5]),
+        "raw_p75": None if quantiles.empty else float(quantiles.loc[0.75]),
+        "raw_p99": None if quantiles.empty else float(quantiles.loc[0.99]),
+        "raw_max": value_or_none(raw, "max"),
+        "winsor_mean": value_or_none(winsorized, "mean"),
+        "winsor_sd": value_or_none(winsorized, "std"),
+        "winsor_min": value_or_none(winsorized, "min"),
+        "winsor_p50": value_or_none(winsorized, "median"),
+        "winsor_max": value_or_none(winsorized, "max"),
+        "capped_low": capped_low,
+        "capped_high": capped_high,
+        "capped_total": capped_low + capped_high,
+        "capped_share": float((capped_low + capped_high) / nonnull.count()) if nonnull.count() else 0.0,
+    }
+
+
+def build_descstat_frame(df: pd.DataFrame, specs: list[DescstatSpec]) -> pd.DataFrame:
+    rows = [summarize_variable(df, spec, order) for order, spec in enumerate(specs, start=1)]
+    return pd.DataFrame(rows).sort_values("order").reset_index(drop=True)
+
+
+def paper_table(desc: pd.DataFrame) -> pd.DataFrame:
+    cols = [
+        "section",
+        "label",
+        "units",
+        "n",
+        "raw_mean",
+        "raw_sd",
+        "winsor_mean",
+        "winsor_sd",
+        "raw_p50",
+        "capped_total",
+    ]
+    table = desc[desc["present"].eq(True)].copy()
+    return table[cols].rename(
+        columns={
+            "section": "Section",
+            "label": "Variable",
+            "units": "Units",
+            "n": "N",
+            "raw_mean": "Mean",
+            "raw_sd": "SD",
+            "winsor_mean": "Mean, winsorized",
+            "winsor_sd": "SD, winsorized",
+            "raw_p50": "Median",
+            "capped_total": "Rows capped",
+        }
+    )
+
+
+def appendix_table(desc: pd.DataFrame) -> pd.DataFrame:
+    cols = [
+        "section",
+        "label",
+        "units",
+        "n",
+        "missing_share",
+        "raw_min",
+        "raw_p01",
+        "raw_p25",
+        "raw_p50",
+        "raw_p75",
+        "raw_p99",
+        "raw_max",
+        "winsor_lower_cap",
+        "winsor_upper_cap",
+        "winsor_mean",
+        "winsor_sd",
+        "capped_low",
+        "capped_high",
+    ]
+    table = desc[desc["present"].eq(True)].copy()
+    return table[cols].rename(
+        columns={
+            "section": "Section",
+            "label": "Variable",
+            "units": "Units",
+            "n": "N",
+            "missing_share": "Missing share",
+            "raw_min": "Min",
+            "raw_p01": "p1",
+            "raw_p25": "p25",
+            "raw_p50": "Median",
+            "raw_p75": "p75",
+            "raw_p99": "p99",
+            "raw_max": "Max",
+            "winsor_lower_cap": "Lower cap",
+            "winsor_upper_cap": "Upper cap",
+            "winsor_mean": "Mean, winsorized",
+            "winsor_sd": "SD, winsorized",
+            "capped_low": "Rows capped low",
+            "capped_high": "Rows capped high",
+        }
+    )
+
+
+LATEX_ESCAPE = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def latex_escape(value: object) -> str:
+    text = "" if pd.isna(value) else str(value)
+    return "".join(LATEX_ESCAPE.get(char, char) for char in text)
+
+
+def write_latex_table(path: Path, table: pd.DataFrame, caption: str, label: str) -> None:
+    float_cols = table.select_dtypes(include=["float"]).columns
+    formatted = table.copy()
+    for col in float_cols:
+        formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else f"{value:,.3f}")
+    column_spec = "l" * len(formatted.columns)
+    header = " & ".join(latex_escape(col) for col in formatted.columns) + r" \\"
+    lines = [
+        f"\\begin{{longtable}}{{{column_spec}}}",
+        f"\\caption{{{latex_escape(caption)}}}\\label{{{label}}}\\\\",
+        r"\hline",
+        header,
+        r"\hline",
+        r"\endfirsthead",
+        r"\hline",
+        header,
+        r"\hline",
+        r"\endhead",
+    ]
+    for row in formatted.itertuples(index=False, name=None):
+        lines.append(" & ".join(latex_escape(value) for value in row) + r" \\")
+    lines.extend([r"\hline", r"\end{longtable}", ""])
+    text = "\n".join(lines)
+    path.write_text(text, encoding="utf-8")
+
+
+def build_descstat_tables(
+    input_panel: Path = DEFAULT_PANEL,
+    output_dir: Path = Path("outputs/descriptive_tables"),
+    config: Path = DEFAULT_DESCSTAT_CONFIG,
+    scope_label: str = "public_private_nonprofit",
+) -> dict[str, Path]:
+    if not input_panel.exists():
+        raise SystemExit(f"Input panel does not exist: {input_panel}")
+    specs = load_descstat_specs(config)
+    df = pd.read_parquet(input_panel)
+    desc = build_descstat_frame(df, specs)
+    paper = paper_table(desc[desc["varname"].isin([spec.varname for spec in specs if spec.include_paper])])
+    appendix = appendix_table(desc[desc["varname"].isin([spec.varname for spec in specs if spec.include_appendix])])
+
+    scoped_output = output_dir / scope_label
+    scoped_output.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "full_descstat": scoped_output / "descstat_full_pre_post_winsor.csv",
+        "paper_csv": scoped_output / "descstat_paper_pre_post_winsor.csv",
+        "paper_tex": scoped_output / "descstat_paper_pre_post_winsor.tex",
+        "appendix_csv": scoped_output / "descstat_appendix_pre_post_winsor.csv",
+        "appendix_tex": scoped_output / "descstat_appendix_pre_post_winsor.tex",
+        "summary": scoped_output / "descstat_summary.json",
+    }
+    desc.to_csv(paths["full_descstat"], index=False)
+    paper.to_csv(paths["paper_csv"], index=False)
+    appendix.to_csv(paths["appendix_csv"], index=False)
+    write_latex_table(paths["paper_tex"], paper, "Descriptive statistics before and after winsorization", "tab:descstat_winsor")
+    write_latex_table(paths["appendix_tex"], appendix, "Appendix descriptive statistics before and after winsorization", "tab:appendix_descstat_winsor")
+    summary = {
+        "built_at_utc": datetime.now(timezone.utc).isoformat(),
+        "input_panel": str(input_panel),
+        "config": str(config),
+        "scope_label": scope_label,
+        "rows": int(len(df)),
+        "columns": int(len(df.columns)),
+        "configured_variables": int(len(specs)),
+        "present_variables": int(desc["present"].fillna(False).astype(bool).sum()),
+        "paper_rows": int(len(paper)),
+        "appendix_rows": int(len(appendix)),
+        "outputs": {key: str(value) for key, value in paths.items() if key != "summary"},
+    }
+    paths["summary"].write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    return paths
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Build descriptive-statistics tables before and after winsorization.")
+    parser.add_argument("--input-panel", type=Path, default=DEFAULT_PANEL)
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/descriptive_tables"))
+    parser.add_argument("--config", type=Path, default=DEFAULT_DESCSTAT_CONFIG)
+    parser.add_argument("--scope-label", default="public_private_nonprofit")
+    args = parser.parse_args()
+    paths = build_descstat_tables(args.input_panel, args.output_dir, args.config, args.scope_label)
+    print(f"Wrote {paths['summary'].parent}")
+
+
+if __name__ == "__main__":
+    main()

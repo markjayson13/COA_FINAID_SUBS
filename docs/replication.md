@@ -75,6 +75,7 @@ The default first-stage extract writes:
 - panel balance, first/last observed year, sector-year count, and minimum-years sensitivity tables
 - a separate selective-admissions robustness panel and selectivity summary
 - derived COA and headroom variables
+- aid-zero consistency summaries and suspect-row diagnostics
 - cleaned net-price diagnostics
 - sector-harmonized finance controls
 - IPEDS metadata exposure flags for imputation, revisions, and parent-linked records
@@ -82,5 +83,27 @@ The default first-stage extract writes:
 - manifest and audit tables documenting all selected variables
 
 The justification for each sample, variable, and cleaning rule is recorded in `docs/data_decision_register.md`.
+
+To audit distributions and extreme values after the panels are built:
+
+```bash
+PYTHONPATH=src python scripts/audit_extremes.py \
+  --input-panel outputs/analysis_panel/public_private_nonprofit/analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet \
+  --input-panel outputs/analysis_panel/public/analysis_panel_coa_headroom_2009_2023_public.parquet \
+  --input-panel outputs/analysis_panel/private_nonprofit/analysis_panel_coa_headroom_2009_2023_private_nonprofit.parquet \
+  --output-dir outputs/extreme_audit
+```
+
+To rebuild the descriptive-statistics table for the paper and the appendix:
+
+```bash
+PYTHONPATH=src python scripts/build_descstat_tables.py \
+  --input-panel outputs/analysis_panel/public_private_nonprofit/analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet \
+  --output-dir outputs/descriptive_tables \
+  --config config/descstat_variables.csv \
+  --scope-label public_private_nonprofit
+```
+
+The same table can be inspected in `notebooks/01_descstat_pre_post_winsorization.ipynb`. The notebook has no saved output; it rebuilds the tables from the local panel.
 
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 335 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

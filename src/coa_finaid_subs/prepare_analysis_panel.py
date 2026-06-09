@@ -680,6 +680,15 @@ def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
             denominator = get_series(denom)
             derived[name] = numerator / denominator.where(denominator != 0)
 
+    if "COA_OFF_NF" in derived:
+        derived["COA_MAIN"] = derived["COA_OFF_NF"]
+    if "HEADROOM_OFF_NF" in derived:
+        derived["HEADROOM_MAIN"] = derived["HEADROOM_OFF_NF"]
+    if "HEADROOM_SHARE_OFF_NF" in derived:
+        derived["HEADROOM_MAIN_SHARE_COA"] = derived["HEADROOM_SHARE_OFF_NF"]
+    if "HEADROOM_MAIN" in derived and "CHG2AY0" in out.columns:
+        derived["HEADROOM_MAIN_SHARE_TUITION"] = safe_divide(derived["HEADROOM_MAIN"], out["CHG2AY0"])
+
     for prefix in ("AGRNT", "FGRNT", "PGRNT", "SGRNT", "OFGRT", "IGRNT", "LOAN", "FLOAN", "OLOAN"):
         add_ratio(out, derived, f"{prefix}_PER_FTFT_COHORT", f"{prefix}_T", "SCFA1N")
 
@@ -721,6 +730,8 @@ def add_constructs(df: pd.DataFrame) -> pd.DataFrame:
     for source, target in (
         ("SCUGRAD", "LN_SCUGRAD"),
         ("SCFA1N", "LN_SCFA1N"),
+        ("COA_MAIN", "LN_COA_MAIN"),
+        ("HEADROOM_MAIN", "LN_HEADROOM_MAIN"),
         ("FIN_TOTAL_REVENUE", "LN_FIN_TOTAL_REVENUE"),
         ("FIN_TOTAL_EXPENSES", "LN_FIN_TOTAL_EXPENSES"),
         ("FIN_TOTAL_ASSETS", "LN_FIN_TOTAL_ASSETS"),
@@ -1603,6 +1614,7 @@ def derived_manifest_rows() -> pd.DataFrame:
         {"varname": "COA_ON", "group": "derived_coa", "role": "on-campus total COA construct", "required": False},
         {"varname": "COA_OFF_NF", "group": "derived_coa", "role": "off-campus not-with-family total COA construct", "required": False},
         {"varname": "COA_OFF_WF", "group": "derived_coa", "role": "off-campus with-family total COA construct", "required": False},
+        {"varname": "COA_MAIN", "group": "derived_coa", "role": "preferred total COA construct for the main headroom measure", "required": False},
         {
             "varname": "HEADROOM_IN_DISTRICT",
             "group": "derived_headroom",
@@ -1612,6 +1624,7 @@ def derived_manifest_rows() -> pd.DataFrame:
         {"varname": "HEADROOM_ON", "group": "derived_headroom", "role": "on-campus non-tuition headroom", "required": False},
         {"varname": "HEADROOM_OFF_NF", "group": "derived_headroom", "role": "off-campus not-with-family non-tuition headroom", "required": False},
         {"varname": "HEADROOM_OFF_WF", "group": "derived_headroom", "role": "off-campus with-family non-tuition headroom", "required": False},
+        {"varname": "HEADROOM_MAIN", "group": "derived_headroom", "role": "preferred non-tuition COA headroom measure", "required": False},
         {
             "varname": "HEADROOM_SHARE_IN_DISTRICT",
             "group": "derived_headroom",
@@ -1621,6 +1634,13 @@ def derived_manifest_rows() -> pd.DataFrame:
         {"varname": "HEADROOM_SHARE_ON", "group": "derived_headroom", "role": "on-campus non-tuition share", "required": False},
         {"varname": "HEADROOM_SHARE_OFF_NF", "group": "derived_headroom", "role": "off-campus not-with-family non-tuition share", "required": False},
         {"varname": "HEADROOM_SHARE_OFF_WF", "group": "derived_headroom", "role": "off-campus with-family non-tuition share", "required": False},
+        {"varname": "HEADROOM_MAIN_SHARE_COA", "group": "derived_headroom", "role": "preferred non-tuition headroom share of total COA", "required": False},
+        {
+            "varname": "HEADROOM_MAIN_SHARE_TUITION",
+            "group": "derived_headroom",
+            "role": "preferred non-tuition headroom divided by in-state tuition and fees",
+            "required": False,
+        },
         {"varname": "PELL_SHARE_OF_TOTAL_GRANT_FTFT", "group": "derived_aid", "role": "Pell share of total FTFT grant dollars", "required": False},
         {
             "varname": "INST_GRANT_SHARE_OF_TOTAL_GRANT_FTFT",
@@ -1786,6 +1806,8 @@ def derived_manifest_rows() -> pd.DataFrame:
         },
         {"varname": "LN_SCUGRAD", "group": "derived_scale", "role": "log total undergraduate SFA cohort", "required": False},
         {"varname": "LN_SCFA1N", "group": "derived_scale", "role": "log FTFT SFA cohort count", "required": False},
+        {"varname": "LN_COA_MAIN", "group": "derived_scale", "role": "log preferred total COA construct", "required": False},
+        {"varname": "LN_HEADROOM_MAIN", "group": "derived_scale", "role": "log preferred non-tuition headroom", "required": False},
         {"varname": "LN_FIN_TOTAL_REVENUE", "group": "derived_scale", "role": "log sector-harmonized total revenue", "required": False},
         {"varname": "LN_FIN_TOTAL_EXPENSES", "group": "derived_scale", "role": "log sector-harmonized total expenses", "required": False},
         {"varname": "LN_FIN_TOTAL_ASSETS", "group": "derived_scale", "role": "log sector-harmonized total assets", "required": False},

@@ -34,14 +34,18 @@ The main study object is full-time, first-time undergraduate pricing and aid.
 
 Main COA variables:
 
-- `COA_OFF_NF`
-- `HEADROOM_OFF_NF`
-- `HEADROOM_SHARE_OFF_NF`
+- `COA_MAIN`
+- `HEADROOM_MAIN`
+- `HEADROOM_MAIN_SHARE_COA`
+- `HEADROOM_MAIN_SHARE_TUITION`
+- `LN_HEADROOM_MAIN`
 - `HEADROOM_ON`
 - `HEADROOM_OFF_WF`
 - `CHG2AY0`, `CHG4AY0`, `CHG5AY0`, `CHG6AY0`, `CHG7AY0`, `CHG8AY0`, `CHG9AY0`
 
-The preferred headroom measure is off-campus not-with-family headroom. It combines tuition and fees, books and supplies, off-campus room and board, and other expenses. The component checks separate charge-like fields from allowance-like fields.
+The preferred headroom measure is the non-tuition part of the off-campus, not-with-family published COA budget. In the panel it is named `HEADROOM_MAIN`. `COA_MAIN` is the matching total COA field. The preferred normalized measure is `HEADROOM_MAIN_SHARE_COA`; `HEADROOM_MAIN_SHARE_TUITION` and `LN_HEADROOM_MAIN` are scale checks.
+
+The measure is an institution-year published budget margin. It is not a student-level measure of unused aid capacity. The FTFT link comes from using FTFT SFA outcomes and reporting `SCFA1N`-weighted sensitivity checks.
 
 Main aid outcomes:
 
@@ -80,6 +84,7 @@ Required exhibits:
 
 - COA and headroom trend table by sector
 - component decomposition of COA growth
+- headroom-measure coverage, correlations, invalid-share counts, and FTFT-cohort-weighted means from `docs/headroom_measurement_audit.md`
 - descriptive statistics before and after table-only winsorization
 - complete-case counts for each planned model
 - aid-zero and metadata exposure summaries for model samples

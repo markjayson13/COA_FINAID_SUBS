@@ -1,7 +1,12 @@
 varname,label,section,units,winsorize,winsor_lower,winsor_upper,include_paper,include_appendix
-COA_OFF_NF,Cost of attendance: off campus not with family,Cost of attendance,dollars,true,0.01,0.99,true,true
-HEADROOM_OFF_NF,Non-tuition COA headroom: off campus not with family,Cost of attendance,dollars,true,0.01,0.99,true,true
-HEADROOM_SHARE_OFF_NF,Non-tuition COA headroom share: off campus not with family,Cost of attendance,share,false,,,true,true
+COA_MAIN,Cost of attendance: main measure,Cost of attendance,dollars,true,0.01,0.99,true,true
+HEADROOM_MAIN,Non-tuition COA headroom: main measure,Cost of attendance,dollars,true,0.01,0.99,true,true
+HEADROOM_MAIN_SHARE_COA,Non-tuition COA headroom share: main measure,Cost of attendance,share,false,,,true,true
+HEADROOM_MAIN_SHARE_TUITION,Non-tuition COA headroom relative to tuition,Cost of attendance,share,false,,,false,true
+CHG2AY0,In-state tuition and fees,COA components,dollars,true,0.01,0.99,false,true
+CHG4AY0,Books and supplies,COA components,dollars,true,0.01,0.99,false,true
+CHG7AY0,Off-campus room and board: not with family,COA components,dollars,true,0.01,0.99,false,true
+CHG8AY0,Off-campus other expenses: not with family,COA components,dollars,true,0.01,0.99,false,true
 PGRNT_T,Total Pell grant dollars: FTFT students,Aid outcomes,dollars,true,0.01,0.99,true,true
 IGRNT_T,Total institutional grant dollars: FTFT students,Aid outcomes,dollars,true,0.01,0.99,true,true
 PGRNT_PER_FTFT_COHORT,Pell dollars per FTFT SFA cohort student,Aid outcomes,dollars_per_student,true,0.01,0.99,true,true

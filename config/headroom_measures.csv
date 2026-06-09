@@ -1,0 +1,13 @@
+measure_id,varname,label,family,role,component_vars,denominator_var,weight_variable,main_model,diagnostic,bounded_0_1,notes
+main_dollars,HEADROOM_MAIN,Main non-tuition COA margin: off campus not with family,dollars,primary,CHG4AY0;CHG7AY0;CHG8AY0,,SCFA1N,true,false,false,Preferred institution-year published allowance margin.
+main_share_coa,HEADROOM_MAIN_SHARE_COA,Main non-tuition COA share,dollars_share,primary,CHG4AY0;CHG7AY0;CHG8AY0,COA_MAIN,SCFA1N,true,false,true,Preferred normalized headroom measure for scale checks.
+main_share_tuition,HEADROOM_MAIN_SHARE_TUITION,Main headroom relative to tuition and fees,ratio,normalization_check,CHG4AY0;CHG7AY0;CHG8AY0,CHG2AY0,SCFA1N,false,true,false,Checks whether results depend on tuition scale.
+main_log,LN_HEADROOM_MAIN,Log main non-tuition COA margin,log,normalization_check,HEADROOM_MAIN,,SCFA1N,false,true,false,Requires positive headroom.
+coa_main,COA_MAIN,Main total COA: off campus not with family,dollars,total_coa,CHG2AY0;CHG4AY0;CHG7AY0;CHG8AY0,,SCFA1N,false,true,false,Total published COA behind the main headroom measure.
+tuition_fees_in_state,CHG2AY0,In-state tuition and required fees,dollars,charge_component,CHG2AY0,,SCFA1N,false,true,false,Charge-like component used to separate price changes from allowance changes.
+books_supplies,CHG4AY0,Books and supplies,dollars,allowance_component,CHG4AY0,,SCFA1N,false,true,false,Allowance component of main headroom.
+off_nf_room_board,CHG7AY0,Off-campus room and board not with family,dollars,allowance_component,CHG7AY0,,SCFA1N,false,true,false,Allowance component of main headroom.
+off_nf_other_expenses,CHG8AY0,Off-campus other expenses not with family,dollars,allowance_component,CHG8AY0,,SCFA1N,false,true,false,Allowance component of main headroom.
+on_campus_dollars,HEADROOM_ON,On-campus non-tuition COA margin,dollars,living_arrangement_check,CHG4AY0;CHG5AY0;CHG6AY0,,SCFA1N,false,true,false,Living-arrangement sensitivity.
+off_with_family_dollars,HEADROOM_OFF_WF,Off-campus with-family non-tuition COA margin,dollars,living_arrangement_check,CHG4AY0;CHG9AY0,,SCFA1N,false,true,false,Living-arrangement sensitivity.
+in_district_dollars,HEADROOM_IN_DISTRICT,In-district non-tuition COA margin,dollars,living_arrangement_check,CHG4AY0;CHG7AY0;CHG8AY0,,SCFA1N,false,true,false,Public-sector diagnostic where in-district tuition is relevant.

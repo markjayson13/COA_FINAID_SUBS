@@ -30,6 +30,8 @@ The primary headroom measures use the current tuition-and-fee, books, room-and-b
 - `CHG5AY0`, `CHG6AY0`, `CHG9AY0` for alternate living-arrangement checks
 - `CHG1AY0` and `CHG3AY0` for in-district and out-of-state diagnostics
 
+The preferred aliases are `COA_MAIN`, `HEADROOM_MAIN`, `HEADROOM_MAIN_SHARE_COA`, `HEADROOM_MAIN_SHARE_TUITION`, and `LN_HEADROOM_MAIN`. The contract in `config/headroom_measures.csv` records which measures are main, which are component checks, and which use `SCFA1N` for FTFT-cohort-weighted summaries.
+
 The main aid variables are full-time, first-time undergraduate aid measures:
 
 - Pell grants: `PGRNT_A`, `PGRNT_N`, `PGRNT_P`, `PGRNT_T`

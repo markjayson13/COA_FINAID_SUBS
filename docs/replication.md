@@ -74,7 +74,7 @@ The default first-stage extract writes:
 - public-only and private nonprofit-only sector files for the same years
 - panel balance, first/last observed year, sector-year count, and minimum-years sensitivity tables
 - a separate selective-admissions robustness panel and selectivity summary
-- derived COA and headroom variables
+- derived COA and headroom variables, including the preferred `HEADROOM_MAIN` aliases
 - aid-zero consistency summaries and suspect-row diagnostics
 - cleaned net-price diagnostics
 - sector-harmonized finance controls
@@ -83,6 +83,19 @@ The default first-stage extract writes:
 - manifest and audit tables documenting all selected variables
 
 The justification for each sample, variable, and cleaning rule is recorded in `docs/data_decision_register.md`.
+
+To audit the headroom measurement family after the panels are built:
+
+```bash
+PYTHONPATH=src python scripts/audit_headroom_measures.py \
+  --panel-dir outputs/analysis_panel \
+  --output-dir outputs/headroom_measures \
+  --config config/headroom_measures.csv
+```
+
+This writes coverage, sector-year, correlation, and FTFT-cohort-weighted summaries for the main headroom measure and its component checks. It does not estimate regressions.
+
+The current checked-in summary of those generated files is `docs/headroom_measurement_audit.md`.
 
 To audit distributions and extreme values after the panels are built:
 

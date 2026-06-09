@@ -10,6 +10,7 @@ import pytest
 from coa_finaid_subs.audit_extremes import audit_extremes
 from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
 from coa_finaid_subs.descstat_tables import build_descstat_tables
+from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
@@ -323,6 +324,10 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert first["HEADROOM_ON"] == 9_000
     assert first["COA_OFF_NF"] == 21_000
     assert first["HEADROOM_OFF_NF"] == 11_000
+    assert first["COA_MAIN"] == 21_000
+    assert first["HEADROOM_MAIN"] == 11_000
+    assert first["HEADROOM_MAIN_SHARE_COA"] == pytest.approx(11_000 / 21_000)
+    assert first["HEADROOM_MAIN_SHARE_TUITION"] == pytest.approx(1.1)
     assert first["PGRNT_PER_FTFT_COHORT"] == pytest.approx(150_000 / 90)
     assert first["IGRNT_PER_FTFT_COHORT"] == pytest.approx(225_000 / 90)
     assert first["PELL_SHARE_OF_TOTAL_GRANT_FTFT"] == pytest.approx(150_000 / 320_000)
@@ -767,7 +772,7 @@ def test_model_plan_audit_reports_complete_case_counts(tmp_path: Path) -> None:
             "year": 2009,
             "UNITID": 1,
             "IGRNT_PER_FTFT_COHORT": 100.0,
-            "HEADROOM_OFF_NF": 10_000.0,
+            "HEADROOM_MAIN": 10_000.0,
             "OPEN_ADMISSIONS_FLAG": False,
             "LN_SCFA1N": 4.0,
             "SCFA1N": 50,
@@ -776,7 +781,7 @@ def test_model_plan_audit_reports_complete_case_counts(tmp_path: Path) -> None:
             "year": 2010,
             "UNITID": 1,
             "IGRNT_PER_FTFT_COHORT": 110.0,
-            "HEADROOM_OFF_NF": 11_000.0,
+            "HEADROOM_MAIN": 11_000.0,
             "OPEN_ADMISSIONS_FLAG": False,
             "LN_SCFA1N": 4.1,
             "SCFA1N": 55,
@@ -785,7 +790,7 @@ def test_model_plan_audit_reports_complete_case_counts(tmp_path: Path) -> None:
             "year": 2010,
             "UNITID": 2,
             "IGRNT_PER_FTFT_COHORT": None,
-            "HEADROOM_OFF_NF": 12_000.0,
+            "HEADROOM_MAIN": 12_000.0,
             "OPEN_ADMISSIONS_FLAG": True,
             "LN_SCFA1N": 4.2,
             "SCFA1N": 60,
@@ -796,8 +801,8 @@ def test_model_plan_audit_reports_complete_case_counts(tmp_path: Path) -> None:
         "\n".join(
             [
                 "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
-                "test_model,baseline_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_OFF_NF,OPEN_ADMISSIONS_FLAG;LN_SCFA1N,SCFA1N,UNITID;year,UNITID,main,Test model.",
-                "missing_var_model,baseline_fe,public_private_nonprofit,analysis.parquet,NOT_PRESENT,HEADROOM_OFF_NF,OPEN_ADMISSIONS_FLAG,,UNITID;year,UNITID,check,Missing variable check.",
+                "test_model,baseline_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,OPEN_ADMISSIONS_FLAG;LN_SCFA1N,SCFA1N,UNITID;year,UNITID,main,Test model.",
+                "missing_var_model,baseline_fe,public_private_nonprofit,analysis.parquet,NOT_PRESENT,HEADROOM_MAIN,OPEN_ADMISSIONS_FLAG,,UNITID;year,UNITID,check,Missing variable check.",
             ]
         )
         + "\n",
@@ -816,3 +821,63 @@ def test_model_plan_audit_reports_complete_case_counts(tmp_path: Path) -> None:
     missing = coverage[coverage["model_id"] == "missing_var_model"].iloc[0]
     assert missing["missing_variables"] == "NOT_PRESENT"
     assert int(missing["complete_case_rows"]) == 0
+
+
+def test_headroom_measure_audit_reports_weighted_coverage_and_share_flags(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet"
+    output_dir = tmp_path / "headroom_measures"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "COA_MAIN": 20_000.0,
+            "HEADROOM_MAIN": 10_000.0,
+            "HEADROOM_MAIN_SHARE_COA": 0.50,
+            "HEADROOM_MAIN_SHARE_TUITION": 1.00,
+            "LN_HEADROOM_MAIN": 9.21,
+            "CHG2AY0": 10_000.0,
+            "CHG4AY0": 1_000.0,
+            "CHG7AY0": 7_000.0,
+            "CHG8AY0": 2_000.0,
+            "SCFA1N": 100,
+        },
+        {
+            "year": 2009,
+            "UNITID": 2,
+            "SECTOR": 2,
+            "COA_MAIN": 30_000.0,
+            "HEADROOM_MAIN": 20_000.0,
+            "HEADROOM_MAIN_SHARE_COA": 1.20,
+            "HEADROOM_MAIN_SHARE_TUITION": 2.00,
+            "LN_HEADROOM_MAIN": 9.90,
+            "CHG2AY0": 10_000.0,
+            "CHG4AY0": 2_000.0,
+            "CHG7AY0": 14_000.0,
+            "CHG8AY0": 4_000.0,
+            "SCFA1N": 300,
+        },
+    ]
+    write_parquet(panel_path, rows)
+
+    specs = load_headroom_specs()
+    assert "HEADROOM_MAIN" in {spec.varname for spec in specs}
+
+    paths = audit_headroom_measures(panel_dir=panel_dir, output_dir=output_dir)
+
+    coverage = pd.read_csv(paths["coverage"])
+    main = coverage[coverage["varname"] == "HEADROOM_MAIN"].iloc[0]
+    assert bool(main["present"]) is True
+    assert int(main["nonnull_rows"]) == 2
+    assert main["mean"] == pytest.approx(15_000.0)
+    assert main["ftft_weighted_mean"] == pytest.approx(17_500.0)
+
+    share = coverage[coverage["varname"] == "HEADROOM_MAIN_SHARE_COA"].iloc[0]
+    assert int(share["invalid_share_count"]) == 1
+
+    tuition_ratio = coverage[coverage["varname"] == "HEADROOM_MAIN_SHARE_TUITION"].iloc[0]
+    assert int(tuition_ratio["invalid_share_count"]) == 0
+
+    by_sector_year = pd.read_csv(paths["by_sector_year"])
+    assert {"public", "private_nonprofit"} <= set(by_sector_year["sector"])

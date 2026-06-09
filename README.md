@@ -33,13 +33,16 @@ The script does not modify the source panel. It writes a derived analysis parque
 
 - `config/analysis_variables.csv` lists the raw IPEDS variables selected for the research extract.
 - `config/descstat_variables.csv` lists the variables and caps used for descriptive-statistics exhibits.
+- `config/model_specifications.csv` lists the first planned model specifications before estimation code is added.
 - `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
 - `scripts/audit_variable_config.py` checks the selected variables against the real panel.
 - `scripts/build_descstat_tables.py` builds the paper and appendix descriptive-statistics tables.
+- `scripts/audit_model_plan.py` checks planned model variables and complete-case counts before estimation.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
+- `docs/research_design.md` fixes the first paper design, claim boundaries, and model sequence.
 - `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
 - `docs/selectivity_index.md` documents the open-admissions baseline control and the selective-admissions robustness index.
 - `docs/sample_dynamics.md` records panel balance, entry/exit definitions, sector-year counts, and external NCES context for the institution-count decline.
@@ -126,10 +129,17 @@ The descriptive-statistics script writes table files under `outputs/descriptive_
 
 - `descstat_paper_pre_post_winsor.csv`
 - `descstat_paper_pre_post_winsor.tex`
+- `descstat_paper_pre_post_winsor.docx`
 - `descstat_appendix_pre_post_winsor.csv`
 - `descstat_appendix_pre_post_winsor.tex`
+- `descstat_appendix_pre_post_winsor.docx`
 - `descstat_full_pre_post_winsor.csv`
 - `descstat_summary.json`
+
+The model-plan audit writes:
+
+- `outputs/model_plan/model_specification_coverage.csv`
+- `outputs/model_plan/model_plan_summary.json`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

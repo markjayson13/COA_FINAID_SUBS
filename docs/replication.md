@@ -106,4 +106,17 @@ PYTHONPATH=src python scripts/build_descstat_tables.py \
 
 The same table can be inspected in `notebooks/01_descstat_pre_post_winsorization.ipynb`. The notebook has no saved output; it rebuilds the tables from the local panel.
 
+The table builder writes CSV, LaTeX, and Word `.docx` files for both the shorter paper table and the longer appendix table.
+
+To check planned model samples before writing estimation code:
+
+```bash
+PYTHONPATH=src python scripts/audit_model_plan.py \
+  --panel-dir outputs/analysis_panel \
+  --output-dir outputs/model_plan \
+  --config config/model_specifications.csv
+```
+
+This writes complete-case counts and missing-variable checks for the model plan. It does not estimate regressions.
+
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 335 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

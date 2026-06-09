@@ -5,8 +5,12 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from docx.document import Document as DocxDocument
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -299,6 +303,72 @@ def write_latex_table(path: Path, table: pd.DataFrame, caption: str, label: str)
     path.write_text(text, encoding="utf-8")
 
 
+def format_export_table(table: pd.DataFrame) -> pd.DataFrame:
+    formatted = table.copy()
+    for col in formatted.columns:
+        if pd.api.types.is_float_dtype(formatted[col]):
+            formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else f"{value:,.3f}")
+        elif pd.api.types.is_integer_dtype(formatted[col]):
+            formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else f"{int(value):,}")
+        else:
+            formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else str(value))
+    return formatted
+
+
+def write_word_table(path: Path, table: pd.DataFrame, title: str, note: str) -> None:
+    try:
+        from docx import Document
+        from docx.enum.section import WD_ORIENT
+        from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches, Pt
+    except ImportError as exc:
+        raise RuntimeError("Word export requires python-docx. Install dependencies with `pip install -r requirements.txt`.") from exc
+
+    document: DocxDocument = Document()
+    section = document.sections[0]
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+    section.left_margin = Inches(0.5)
+    section.right_margin = Inches(0.5)
+    section.top_margin = Inches(0.6)
+    section.bottom_margin = Inches(0.6)
+
+    title_paragraph = document.add_paragraph()
+    title_run = title_paragraph.add_run(title)
+    title_run.bold = True
+    title_run.font.size = Pt(11)
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    formatted = format_export_table(table)
+    word_table = document.add_table(rows=1, cols=len(formatted.columns))
+    word_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    word_table.style = "Table Grid"
+
+    header_cells = word_table.rows[0].cells
+    for idx, col in enumerate(formatted.columns):
+        paragraph = header_cells[idx].paragraphs[0]
+        run = paragraph.add_run(str(col))
+        run.bold = True
+        run.font.size = Pt(8)
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        header_cells[idx].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+
+    for row in formatted.itertuples(index=False, name=None):
+        cells = word_table.add_row().cells
+        for idx, value in enumerate(row):
+            paragraph = cells[idx].paragraphs[0]
+            run = paragraph.add_run(str(value))
+            run.font.size = Pt(8)
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT if idx >= 3 else WD_ALIGN_PARAGRAPH.LEFT
+            cells[idx].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+
+    note_paragraph = document.add_paragraph()
+    note_run = note_paragraph.add_run(note)
+    note_run.font.size = Pt(8)
+    document.save(path)
+
+
 def build_descstat_tables(
     input_panel: Path = DEFAULT_PANEL,
     output_dir: Path = Path("outputs/descriptive_tables"),
@@ -319,8 +389,10 @@ def build_descstat_tables(
         "full_descstat": scoped_output / "descstat_full_pre_post_winsor.csv",
         "paper_csv": scoped_output / "descstat_paper_pre_post_winsor.csv",
         "paper_tex": scoped_output / "descstat_paper_pre_post_winsor.tex",
+        "paper_docx": scoped_output / "descstat_paper_pre_post_winsor.docx",
         "appendix_csv": scoped_output / "descstat_appendix_pre_post_winsor.csv",
         "appendix_tex": scoped_output / "descstat_appendix_pre_post_winsor.tex",
+        "appendix_docx": scoped_output / "descstat_appendix_pre_post_winsor.docx",
         "summary": scoped_output / "descstat_summary.json",
     }
     desc.to_csv(paths["full_descstat"], index=False)
@@ -328,6 +400,12 @@ def build_descstat_tables(
     appendix.to_csv(paths["appendix_csv"], index=False)
     write_latex_table(paths["paper_tex"], paper, "Descriptive statistics before and after winsorization", "tab:descstat_winsor")
     write_latex_table(paths["appendix_tex"], appendix, "Appendix descriptive statistics before and after winsorization", "tab:appendix_descstat_winsor")
+    note = (
+        "Notes: Winsorized columns apply only to this exhibit. The analysis panel is unchanged. "
+        "Caps are defined in config/descstat_variables.csv."
+    )
+    write_word_table(paths["paper_docx"], paper, "Descriptive statistics before and after winsorization", note)
+    write_word_table(paths["appendix_docx"], appendix, "Appendix descriptive statistics before and after winsorization", note)
     summary = {
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
         "input_panel": str(input_panel),

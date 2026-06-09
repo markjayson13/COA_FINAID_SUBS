@@ -10,6 +10,7 @@ import pytest
 from coa_finaid_subs.audit_extremes import audit_extremes
 from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
 from coa_finaid_subs.descstat_tables import build_descstat_tables
+from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
 
@@ -730,8 +731,10 @@ def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> Non
         "full_descstat",
         "paper_csv",
         "paper_tex",
+        "paper_docx",
         "appendix_csv",
         "appendix_tex",
+        "appendix_docx",
         "summary",
     }
     for path in paths.values():
@@ -750,3 +753,66 @@ def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> Non
     assert paper["Variable"].tolist() == ["Cost of attendance", "Headroom share"]
     assert "Rows capped" in paper.columns
     assert {"p1", "p99", "Lower cap", "Upper cap"} <= set(appendix.columns)
+    assert paths["paper_docx"].stat().st_size > 0
+    assert paths["appendix_docx"].stat().st_size > 0
+
+
+def test_model_plan_audit_reports_complete_case_counts(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis.parquet"
+    config_path = tmp_path / "model_specifications.csv"
+    output_dir = tmp_path / "model_plan"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "IGRNT_PER_FTFT_COHORT": 100.0,
+            "HEADROOM_OFF_NF": 10_000.0,
+            "OPEN_ADMISSIONS_FLAG": False,
+            "LN_SCFA1N": 4.0,
+            "SCFA1N": 50,
+        },
+        {
+            "year": 2010,
+            "UNITID": 1,
+            "IGRNT_PER_FTFT_COHORT": 110.0,
+            "HEADROOM_OFF_NF": 11_000.0,
+            "OPEN_ADMISSIONS_FLAG": False,
+            "LN_SCFA1N": 4.1,
+            "SCFA1N": 55,
+        },
+        {
+            "year": 2010,
+            "UNITID": 2,
+            "IGRNT_PER_FTFT_COHORT": None,
+            "HEADROOM_OFF_NF": 12_000.0,
+            "OPEN_ADMISSIONS_FLAG": True,
+            "LN_SCFA1N": 4.2,
+            "SCFA1N": 60,
+        },
+    ]
+    write_parquet(panel_path, rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "test_model,baseline_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_OFF_NF,OPEN_ADMISSIONS_FLAG;LN_SCFA1N,SCFA1N,UNITID;year,UNITID,main,Test model.",
+                "missing_var_model,baseline_fe,public_private_nonprofit,analysis.parquet,NOT_PRESENT,HEADROOM_OFF_NF,OPEN_ADMISSIONS_FLAG,,UNITID;year,UNITID,check,Missing variable check.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = audit_model_plan(panel_dir=panel_dir, output_dir=output_dir, config=config_path)
+
+    coverage = pd.read_csv(paths["coverage"])
+    main = coverage[coverage["model_id"] == "test_model"].iloc[0]
+    assert bool(main["panel_exists"]) is True
+    assert pd.isna(main["missing_variables"]) or main["missing_variables"] == ""
+    assert int(main["complete_case_rows"]) == 2
+    assert int(main["complete_case_institutions"]) == 1
+
+    missing = coverage[coverage["model_id"] == "missing_var_model"].iloc[0]
+    assert missing["missing_variables"] == "NOT_PRESENT"
+    assert int(missing["complete_case_rows"]) == 0

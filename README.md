@@ -54,6 +54,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
+- `docs/design_justification.md` ties the empirical design choices to source rules, prior work, and theory.
 - `docs/headroom_measurement.md` defines the preferred headroom measure and the claim boundary for paper language.
 - `docs/headroom_measurement_audit.md` records the current coverage, weighting, and component checks from the rebuilt local panel.
 - `docs/descriptive_decomposition.md` records the current sector trends and same-institution component changes.

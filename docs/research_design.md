@@ -8,6 +8,17 @@ The paper asks whether institutional cost-of-attendance headroom is related to f
 
 The question is narrower than a general Bennett-hypothesis claim. The mechanism is the Title IV packaging cap: cost of attendance sets the upper bound for total aid, and institutions report the allowance categories that enter that cap. If an institution raises allowance-based headroom, the feasible aid package changes. The empirical question is whether that headroom lines up with less institutional grant aid, more Pell or federal grant aid, more federal borrowing, or higher net price.
 
+## Source and theory trail
+
+`docs/design_justification.md` records the justification for each major design choice. It separates four bases:
+
+- federal aid and IPEDS reporting rules
+- higher-education pricing, aid, and Bennett-hypothesis literature
+- nonprofit, public-sector, and organizational theory
+- causal-design logic for exposure, placebo, and pre-trend checks
+
+The design memo should be read with that crosswalk. If a design choice is changed, the source or theory basis should be changed there as well.
+
 ## Main estimand
 
 The main estimand is institution-year incidence among four-year Title IV public and private nonprofit institutions.

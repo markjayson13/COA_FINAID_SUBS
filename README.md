@@ -34,7 +34,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `config/analysis_variables.csv` lists the raw IPEDS variables selected for the research extract.
 - `config/descstat_variables.csv` lists the variables and caps used for descriptive-statistics exhibits.
 - `config/headroom_measures.csv` lists the main headroom measure and the component checks used before estimation.
-- `config/model_specifications.csv` lists the first planned model specifications before estimation code is added.
+- `config/model_specifications.csv` lists the first model specifications used by the sample builder and fixed-effects estimator.
 - `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
 - `scripts/audit_variable_config.py` checks the selected variables against the real panel.
@@ -43,6 +43,8 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/build_descstat_tables.py` builds the paper and appendix descriptive-statistics tables.
 - `scripts/audit_model_plan.py` checks planned model variables and complete-case counts before estimation.
 - `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
+- `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
+- `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, LaTeX, and Word.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
@@ -50,6 +52,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/headroom_measurement_audit.md` records the current coverage, weighting, and component checks from the rebuilt local panel.
 - `docs/descriptive_decomposition.md` records the current sector trends and same-institution component changes.
 - `docs/pre_estimation_readiness.md` records the current complete-case model sample checks.
+- `docs/fixed_effects_baseline.md` records the current baseline fixed-effects estimates and diagnostics.
 - `docs/research_design.md` fixes the first paper design, claim boundaries, and model sequence.
 - `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
 - `docs/selectivity_index.md` documents the open-admissions baseline control and the selective-admissions robustness index.
@@ -58,7 +61,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/outlier_audit.md` describes the audit-only distribution and extreme-value review before any winsorization decision.
 - `tests/` covers the main data-integrity checks with small synthetic panels.
 
-This repository currently covers the first analysis-panel build. Estimation scripts, tables, and manuscript exhibits will be added after the sample and variable checks are final.
+This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, and the first fixed-effects estimation pass. Policy-shock designs, final estimate tables, and manuscript exhibits remain separate next steps.
 
 ## Install
 
@@ -169,6 +172,20 @@ The model-sample builder writes:
 - `outputs/model_samples/model_sample_variable_missingness.csv`
 - `outputs/model_samples/model_sample_summary.json`
 - complete-case model samples under `outputs/model_samples/samples/`
+
+The fixed-effects script writes:
+
+- `outputs/fixed_effects/fixed_effects_coefficients.csv`
+- `outputs/fixed_effects/fixed_effects_focal_coefficients.csv`
+- `outputs/fixed_effects/fixed_effects_model_diagnostics.csv`
+- `outputs/fixed_effects/fixed_effects_summary.json`
+
+The estimate-table script writes:
+
+- `outputs/estimate_tables/fixed_effects_main_table.csv`
+- `outputs/estimate_tables/fixed_effects_main_table.tex`
+- `outputs/estimate_tables/fixed_effects_main_table.docx`
+- `outputs/estimate_tables/fixed_effects_table_summary.json`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

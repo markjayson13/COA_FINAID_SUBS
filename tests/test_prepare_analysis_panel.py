@@ -11,6 +11,8 @@ from coa_finaid_subs.audit_extremes import audit_extremes
 from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
 from coa_finaid_subs.descriptive_decomposition import build_descriptive_decomposition
 from coa_finaid_subs.descstat_tables import build_descstat_tables
+from coa_finaid_subs.estimate_tables import build_estimate_tables
+from coa_finaid_subs.fixed_effects import run_fixed_effects
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.model_samples import build_model_samples
@@ -1071,3 +1073,236 @@ def test_model_sample_builder_materializes_complete_case_samples(tmp_path: Path)
     missingness = pd.read_csv(paths["missingness"])
     outcome = missingness[missingness["varname"].eq("IGRNT_PER_FTFT_COHORT")].iloc[0]
     assert int(outcome["missing_rows"]) == 1
+
+
+def test_model_sample_builder_materializes_private_nonprofit_interaction(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis.parquet"
+    config_path = tmp_path / "model_specifications.csv"
+    output_dir = tmp_path / "model_samples"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "IGRNT_PER_FTFT_COHORT": 100.0,
+            "HEADROOM_MAIN": 10_000.0,
+        },
+        {
+            "year": 2009,
+            "UNITID": 2,
+            "SECTOR": 2,
+            "IGRNT_PER_FTFT_COHORT": 200.0,
+            "HEADROOM_MAIN": 12_000.0,
+        },
+    ]
+    write_parquet(panel_path, rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "interaction_model,sector_interaction,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,HEADROOM_MAIN_X_PRIVATE_NONPROFIT,,UNITID;year,UNITID,sector_interaction,Interaction sample.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = build_model_samples(panel_dir=panel_dir, output_dir=output_dir, config=config_path)
+
+    sample = pd.read_parquet(paths["sample_dir"] / "interaction_model.parquet")
+    assert "HEADROOM_MAIN_X_PRIVATE_NONPROFIT" in sample.columns
+    assert sample["HEADROOM_MAIN_X_PRIVATE_NONPROFIT"].tolist() == [0.0, 12_000.0]
+
+
+def test_model_sample_builder_applies_metadata_clean_filter(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis.parquet"
+    config_path = tmp_path / "model_specifications.csv"
+    output_dir = tmp_path / "model_samples"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "IGRNT_PER_FTFT_COHORT": 100.0,
+            "HEADROOM_MAIN": 10_000.0,
+            "FLAG_IPEDS_ANY_METADATA_EXPOSURE": False,
+        },
+        {
+            "year": 2010,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "IGRNT_PER_FTFT_COHORT": 110.0,
+            "HEADROOM_MAIN": 11_000.0,
+            "FLAG_IPEDS_ANY_METADATA_EXPOSURE": True,
+        },
+    ]
+    write_parquet(panel_path, rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes,sample_filter,filter_notes",
+                "metadata_clean_model,sensitivity,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,,,UNITID;year,UNITID,sensitivity,Metadata clean check.,metadata_clean,Drop metadata exposure.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = build_model_samples(panel_dir=panel_dir, output_dir=output_dir, config=config_path)
+
+    sample = pd.read_parquet(paths["sample_dir"] / "metadata_clean_model.parquet")
+    assert sample["year"].tolist() == [2009]
+    manifest = pd.read_csv(paths["manifest"]).iloc[0]
+    assert manifest["sample_filter"] == "metadata_clean"
+
+
+def test_fixed_effects_estimator_recovers_known_within_coefficient(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "model_samples" / "samples"
+    output_dir = tmp_path / "fixed_effects"
+    config_path = tmp_path / "model_specifications.csv"
+    rows = []
+    unit_effects = {101: 15.0, 102: -4.0, 103: 8.0, 104: 2.0, 105: -10.0}
+    year_effects = {2009: -3.0, 2010: 0.0, 2011: 4.0, 2012: 7.0}
+    for unit_idx, unitid in enumerate(unit_effects, start=1):
+        for year_idx, year in enumerate(year_effects, start=1):
+            headroom = float((unit_idx - 3) * (year_idx - 2) + unit_idx * 0.25)
+            outcome = 2.0 * headroom + unit_effects[unitid] + year_effects[year]
+            rows.append(
+                {
+                    "UNITID": unitid,
+                    "year": year,
+                    "HEADROOM_MAIN": headroom,
+                    "IGRNT_PER_FTFT_COHORT": outcome,
+                }
+            )
+    write_parquet(sample_dir / "known_model.parquet", rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "known_model,baseline_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,,,UNITID;year,UNITID,main,Known coefficient check.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = run_fixed_effects(sample_dir=sample_dir, output_dir=output_dir, config=config_path)
+
+    focal = pd.read_csv(paths["focal_coefficients"]).iloc[0]
+    assert focal["term"] == "HEADROOM_MAIN"
+    assert focal["estimate"] == pytest.approx(2.0)
+    assert int(focal["nobs"]) == len(rows)
+    assert int(focal["clusters"]) == len(unit_effects)
+    assert bool(focal["rank_deficient"]) is False
+    assert focal["std_error"] >= 0
+
+    diagnostics = pd.read_csv(paths["diagnostics"]).iloc[0]
+    assert diagnostics["status"] == "estimated"
+    assert int(diagnostics["absorbed_iterations"]) >= 1
+    assert int(diagnostics["matrix_rank"]) == 1
+
+
+def test_fixed_effects_estimator_recovers_known_sector_interaction(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "model_samples" / "samples"
+    output_dir = tmp_path / "fixed_effects"
+    config_path = tmp_path / "model_specifications.csv"
+    rows = []
+    unit_effects = {101: 15.0, 102: -4.0, 103: 8.0, 201: 2.0, 202: -10.0, 203: 6.0}
+    year_effects = {2009: -3.0, 2010: 0.0, 2011: 4.0, 2012: 7.0}
+    for unit_idx, unitid in enumerate(unit_effects, start=1):
+        sector = 2 if unitid >= 200 else 1
+        private = 1.0 if sector == 2 else 0.0
+        for year_idx, year in enumerate(year_effects, start=1):
+            headroom = float((unit_idx - 3) * (year_idx - 2) + unit_idx * 0.5)
+            outcome = 1.0 * headroom + 2.0 * headroom * private + unit_effects[unitid] + year_effects[year]
+            rows.append(
+                {
+                    "UNITID": unitid,
+                    "year": year,
+                    "SECTOR": sector,
+                    "HEADROOM_MAIN": headroom,
+                    "IGRNT_PER_FTFT_COHORT": outcome,
+                }
+            )
+    write_parquet(sample_dir / "interaction_model.parquet", rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "interaction_model,sector_interaction,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,HEADROOM_MAIN_X_PRIVATE_NONPROFIT,,UNITID;year,UNITID,sector_interaction,Known interaction check.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = run_fixed_effects(sample_dir=sample_dir, output_dir=output_dir, config=config_path)
+    coefficients = pd.read_csv(paths["coefficients"])
+
+    public_slope = coefficients[coefficients["term"].eq("HEADROOM_MAIN")].iloc[0]
+    private_difference = coefficients[coefficients["term"].eq("HEADROOM_MAIN_X_PRIVATE_NONPROFIT")].iloc[0]
+    assert public_slope["estimate"] == pytest.approx(1.0)
+    assert private_difference["estimate"] == pytest.approx(2.0)
+    assert bool(public_slope["rank_deficient"]) is False
+
+
+def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
+    fixed_effects_dir = tmp_path / "fixed_effects"
+    output_dir = tmp_path / "estimate_tables"
+    fixed_effects_dir.mkdir(parents=True)
+    coefficients = pd.DataFrame(
+        [
+            {
+                "model_id": "fe_inst_grant_per_student",
+                "stage": "baseline_fe",
+                "role": "main",
+                "term": "HEADROOM_MAIN",
+                "is_focal": True,
+                "estimate": 0.12,
+                "std_error": 0.03,
+                "t_stat": 4.0,
+                "p_value_normal": 0.001,
+                "nobs": 100,
+                "clusters": 10,
+                "fixed_effects": "UNITID;year",
+                "weight_variable": "",
+                "within_r_squared": 0.10,
+                "matrix_rank": 1,
+                "rank_deficient": False,
+            },
+            {
+                "model_id": "pooled_sector_interaction_inst_grant",
+                "stage": "sector_interaction",
+                "role": "sector_interaction",
+                "term": "HEADROOM_MAIN_X_PRIVATE_NONPROFIT",
+                "is_focal": False,
+                "estimate": 0.75,
+                "std_error": 0.10,
+                "t_stat": 7.5,
+                "p_value_normal": 0.0001,
+                "nobs": 100,
+                "clusters": 10,
+                "fixed_effects": "UNITID;year",
+                "weight_variable": "",
+                "within_r_squared": 0.20,
+                "matrix_rank": 2,
+                "rank_deficient": False,
+            },
+        ]
+    )
+    diagnostics = pd.DataFrame([{"model_id": "fe_inst_grant_per_student"}, {"model_id": "pooled_sector_interaction_inst_grant"}])
+    coefficients.to_csv(fixed_effects_dir / "fixed_effects_coefficients.csv", index=False)
+    diagnostics.to_csv(fixed_effects_dir / "fixed_effects_model_diagnostics.csv", index=False)
+
+    paths = build_estimate_tables(fixed_effects_dir=fixed_effects_dir, output_dir=output_dir)
+
+    assert set(paths) == {"paper_csv", "paper_tex", "paper_docx", "summary"}
+    for path in paths.values():
+        assert path.exists()
+    table = pd.read_csv(paths["paper_csv"])
+    assert "COA headroom x private nonprofit" in set(table["Term"])
+    assert table.loc[table["Term"].eq("COA headroom"), "Estimate"].iloc[0] == "0.1200***"
+    assert paths["paper_docx"].stat().st_size > 0

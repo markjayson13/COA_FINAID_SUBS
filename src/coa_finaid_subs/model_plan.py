@@ -13,6 +13,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_CONFIG = REPO_ROOT / "config" / "model_specifications.csv"
 DEFAULT_PANEL_DIR = REPO_ROOT / "outputs" / "analysis_panel"
 
+MODEL_DERIVED_TERM_SOURCES: dict[str, tuple[str, ...]] = {
+    "SECTOR_PRIVATE_NONPROFIT": ("SECTOR",),
+    "HEADROOM_MAIN_X_PRIVATE_NONPROFIT": ("HEADROOM_MAIN", "SECTOR"),
+    "HEADROOM_MAIN_SHARE_COA_X_PRIVATE_NONPROFIT": ("HEADROOM_MAIN_SHARE_COA", "SECTOR"),
+}
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -28,6 +34,8 @@ class ModelSpec:
     cluster_level: str
     role: str
     notes: str
+    sample_filter: str = ""
+    filter_notes: str = ""
 
 
 def split_semicolon(value: object) -> tuple[str, ...]:
@@ -80,6 +88,8 @@ def load_model_specs(path: Path = DEFAULT_MODEL_CONFIG) -> list[ModelSpec]:
                 cluster_level=str(row["cluster_level"]).strip(),
                 role=str(row["role"]).strip(),
                 notes=str(row["notes"]).strip(),
+                sample_filter="" if "sample_filter" not in row or pd.isna(row["sample_filter"]) else str(row["sample_filter"]).strip(),
+                filter_notes="" if "filter_notes" not in row or pd.isna(row["filter_notes"]) else str(row["filter_notes"]).strip(),
             )
         )
     return specs
@@ -89,7 +99,7 @@ def panel_path(panel_dir: Path, spec: ModelSpec) -> Path:
     return panel_dir / spec.sample_scope / spec.analysis_panel
 
 
-def variables_for_spec(spec: ModelSpec) -> list[str]:
+def model_terms_for_spec(spec: ModelSpec) -> list[str]:
     variables = [spec.dependent_variable, spec.focal_variable]
     variables.extend(spec.controls)
     variables.extend(spec.fixed_effects)
@@ -99,6 +109,98 @@ def variables_for_spec(spec: ModelSpec) -> list[str]:
         variables.append(spec.cluster_level)
     seen: set[str] = set()
     return [var for var in variables if not (var in seen or seen.add(var))]
+
+
+def filter_source_variables(spec: ModelSpec) -> list[str]:
+    if spec.sample_filter == "metadata_clean":
+        return ["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]
+    if spec.sample_filter in {"min_years_10", "balanced_full_window", "no_suspect_aid_zero"}:
+        return ["UNITID", "year"]
+    return []
+
+
+def source_variables_for_terms(terms: list[str]) -> list[str]:
+    variables: list[str] = []
+    for term in terms:
+        variables.extend(MODEL_DERIVED_TERM_SOURCES.get(term, (term,)))
+    seen: set[str] = set()
+    return [var for var in variables if not (var in seen or seen.add(var))]
+
+
+def variables_for_spec(spec: ModelSpec) -> list[str]:
+    variables = source_variables_for_terms(model_terms_for_spec(spec))
+    variables.extend(filter_source_variables(spec))
+    seen: set[str] = set()
+    return [var for var in variables if not (var in seen or seen.add(var))]
+
+
+def add_model_derived_terms(frame: pd.DataFrame, terms: list[str]) -> pd.DataFrame:
+    work = frame.copy()
+    required = set(terms)
+    if "SECTOR_PRIVATE_NONPROFIT" in required and "SECTOR" in work.columns:
+        work["SECTOR_PRIVATE_NONPROFIT"] = pd.to_numeric(work["SECTOR"], errors="coerce").eq(2).astype(float)
+    interaction_terms = {
+        "HEADROOM_MAIN_X_PRIVATE_NONPROFIT": "HEADROOM_MAIN",
+        "HEADROOM_MAIN_SHARE_COA_X_PRIVATE_NONPROFIT": "HEADROOM_MAIN_SHARE_COA",
+    }
+    for term, base in interaction_terms.items():
+        if term in required and {base, "SECTOR"} <= set(work.columns):
+            private_flag = pd.to_numeric(work["SECTOR"], errors="coerce").eq(2).astype(float)
+            work[term] = pd.to_numeric(work[base], errors="coerce") * private_flag
+    return work
+
+
+def scope_dir_for_spec(panel_dir: Path, spec: ModelSpec) -> Path:
+    return panel_dir / spec.sample_scope
+
+
+def balance_table(scope_dir: Path) -> pd.DataFrame:
+    path = scope_dir / "analysis_panel_balance_by_institution.csv"
+    if not path.exists():
+        raise FileNotFoundError(f"Panel-balance file not found for sample filter: {path}")
+    return pd.read_csv(path)
+
+
+def bool_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_bool_dtype(series):
+        return series.fillna(False).astype(bool)
+    text = series.fillna("").astype(str).str.strip().str.lower()
+    return text.isin({"true", "1", "yes", "y"})
+
+
+def sample_filter_mask(frame: pd.DataFrame, spec: ModelSpec, scope_dir: Path) -> pd.Series:
+    if not spec.sample_filter:
+        return pd.Series(True, index=frame.index)
+
+    if spec.sample_filter == "metadata_clean":
+        if "FLAG_IPEDS_ANY_METADATA_EXPOSURE" not in frame.columns:
+            raise ValueError("metadata_clean filter requires FLAG_IPEDS_ANY_METADATA_EXPOSURE")
+        return ~bool_series(frame["FLAG_IPEDS_ANY_METADATA_EXPOSURE"])
+
+    if spec.sample_filter == "min_years_10":
+        balance = balance_table(scope_dir)
+        keep = set(balance.loc[pd.to_numeric(balance["years_observed"], errors="coerce").ge(10), "UNITID"])
+        return frame["UNITID"].isin(keep)
+
+    if spec.sample_filter == "balanced_full_window":
+        balance = balance_table(scope_dir)
+        keep = set(balance.loc[bool_series(balance["balanced_full_window"]), "UNITID"])
+        return frame["UNITID"].isin(keep)
+
+    if spec.sample_filter == "no_suspect_aid_zero":
+        path = scope_dir / "analysis_aid_zero_suspect_rows.csv"
+        if not path.exists():
+            raise FileNotFoundError(f"Aid-zero suspect-row file not found for sample filter: {path}")
+        suspect = pd.read_csv(path)
+        if suspect.empty:
+            return pd.Series(True, index=frame.index)
+        if "any_issue" in suspect.columns:
+            suspect = suspect[bool_series(suspect["any_issue"])]
+        suspect_keys = set(zip(pd.to_numeric(suspect["UNITID"], errors="coerce"), pd.to_numeric(suspect["year"], errors="coerce")))
+        keys = list(zip(pd.to_numeric(frame["UNITID"], errors="coerce"), pd.to_numeric(frame["year"], errors="coerce")))
+        return pd.Series([key not in suspect_keys for key in keys], index=frame.index)
+
+    raise ValueError(f"Unknown sample_filter for {spec.model_id}: {spec.sample_filter}")
 
 
 def audit_model_plan(
@@ -127,17 +229,23 @@ def audit_model_plan(
             )
             continue
 
-        variables = variables_for_spec(spec)
+        source_variables = variables_for_spec(spec)
+        model_terms = model_terms_for_spec(spec)
         df = pd.read_parquet(path)
-        missing = [var for var in variables if var not in df.columns]
-        available = [var for var in variables if var in df.columns]
-        complete = df.dropna(subset=available) if available and not missing else df.iloc[0:0]
+        missing = [var for var in source_variables if var not in df.columns]
+        if missing:
+            complete = df.iloc[0:0]
+        else:
+            work = add_model_derived_terms(df[source_variables].copy(), model_terms)
+            filter_mask = sample_filter_mask(work, spec, scope_dir_for_spec(panel_dir, spec))
+            complete = work[filter_mask].dropna(subset=model_terms)
         rows.append(
             {
                 "model_id": spec.model_id,
                 "stage": spec.stage,
                 "sample_scope": spec.sample_scope,
                 "role": spec.role,
+                "sample_filter": spec.sample_filter,
                 "dependent_variable": spec.dependent_variable,
                 "focal_variable": spec.focal_variable,
                 "controls": ";".join(spec.controls),
@@ -147,12 +255,14 @@ def audit_model_plan(
                 "panel_exists": True,
                 "panel_path": str(path),
                 "missing_variables": ";".join(missing),
-                "variables_checked": ";".join(variables),
+                "variables_checked": ";".join(source_variables),
+                "model_terms_checked": ";".join(model_terms),
                 "complete_case_rows": int(len(complete)),
                 "complete_case_institutions": int(complete["UNITID"].nunique()) if "UNITID" in complete.columns else 0,
                 "total_rows": int(len(df)),
                 "total_institutions": int(df["UNITID"].nunique()) if "UNITID" in df.columns else 0,
                 "notes": spec.notes,
+                "filter_notes": spec.filter_notes,
             }
         )
 

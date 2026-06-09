@@ -153,4 +153,25 @@ PYTHONPATH=src python scripts/build_model_samples.py \
 
 This writes one complete-case parquet per model and a sample manifest. The current checked-in summary is `docs/pre_estimation_readiness.md`.
 
+To estimate the configured institution and year fixed-effects models:
+
+```bash
+PYTHONPATH=src python scripts/run_fixed_effects.py \
+  --sample-dir outputs/model_samples/samples \
+  --output-dir outputs/fixed_effects \
+  --config config/model_specifications.csv
+```
+
+This writes coefficient tables and model diagnostics. The current checked-in summary is `docs/fixed_effects_baseline.md`.
+
+To export the current estimate table:
+
+```bash
+PYTHONPATH=src python scripts/build_estimate_tables.py \
+  --fixed-effects-dir outputs/fixed_effects \
+  --output-dir outputs/estimate_tables
+```
+
+This writes CSV, LaTeX, and Word versions of the fixed-effects table.
+
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 9, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 355 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

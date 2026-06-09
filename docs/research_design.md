@@ -101,6 +101,8 @@ Run public and private nonprofit models separately. Also run a pooled model with
 
 This stage supports an institution-level incidence claim. It does not support a student-level packaging claim.
 
+The first implementation is now in `scripts/run_fixed_effects.py`, with the current local run summarized in `docs/fixed_effects_baseline.md`. `scripts/build_estimate_tables.py` exports the current fixed-effects table to CSV, LaTeX, and Word.
+
 ### Stage 3: policy exposure design
 
 The stronger design should interact predetermined exposure with national aid shocks:
@@ -155,6 +157,6 @@ Not allowed from IPEDS alone:
 
 ## Next implementation steps
 
-1. Add fixed-effects estimation using the materialized model samples.
-2. Add `config/policy_shocks.csv` only after every shock date and source is verified.
-3. Keep policy-exposure designs separate from the baseline fixed-effects estimates.
+1. Add `config/policy_shocks.csv` only after every shock date and source is verified.
+2. Keep policy-exposure designs separate from the baseline fixed-effects estimates.
+3. Add manuscript exhibit scripts only after the paper table order is fixed.

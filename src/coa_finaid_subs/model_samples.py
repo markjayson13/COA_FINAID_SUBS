@@ -7,7 +7,17 @@ from pathlib import Path
 
 import pandas as pd
 
-from coa_finaid_subs.model_plan import DEFAULT_MODEL_CONFIG, DEFAULT_PANEL_DIR, load_model_specs, panel_path, variables_for_spec
+from coa_finaid_subs.model_plan import (
+    DEFAULT_MODEL_CONFIG,
+    DEFAULT_PANEL_DIR,
+    add_model_derived_terms,
+    load_model_specs,
+    model_terms_for_spec,
+    panel_path,
+    sample_filter_mask,
+    scope_dir_for_spec,
+    variables_for_spec,
+)
 
 
 def variable_roles(spec) -> dict[str, str]:
@@ -144,6 +154,7 @@ def build_model_samples(
                     "stage": spec.stage,
                     "sample_scope": spec.sample_scope,
                     "role": spec.role,
+                    "sample_filter": spec.sample_filter,
                     "source_panel": str(path),
                     "output_sample": "",
                     "source_rows": 0,
@@ -151,14 +162,16 @@ def build_model_samples(
                     "sample_institutions": 0,
                     "missing_variables": ";".join(variables_for_spec(spec)),
                     "notes": spec.notes,
+                    "filter_notes": spec.filter_notes,
                 }
             )
             continue
 
         df = pd.read_parquet(path)
-        variables = variables_for_spec(spec)
-        missing = [var for var in variables if var not in df.columns]
-        missing_rows.extend(missingness_rows(spec, df, variables))
+        source_variables = variables_for_spec(spec)
+        model_terms = model_terms_for_spec(spec)
+        missing = [var for var in source_variables if var not in df.columns]
+        missing_rows.extend(missingness_rows(spec, df, source_variables))
         if missing:
             manifest_rows.append(
                 {
@@ -166,6 +179,7 @@ def build_model_samples(
                     "stage": spec.stage,
                     "sample_scope": spec.sample_scope,
                     "role": spec.role,
+                    "sample_filter": spec.sample_filter,
                     "source_panel": str(path),
                     "output_sample": "",
                     "source_rows": int(len(df)),
@@ -173,14 +187,17 @@ def build_model_samples(
                     "sample_institutions": 0,
                     "missing_variables": ";".join(missing),
                     "notes": spec.notes,
+                    "filter_notes": spec.filter_notes,
                 }
             )
             continue
 
-        keep_columns = [var for var in variables if var in df.columns]
+        keep_columns = [var for var in source_variables if var in df.columns]
         extra_columns = [col for col in ("INSTNM", "SECTOR", "CONTROL", "STABBR") if col in df.columns and col not in keep_columns]
         work = df[keep_columns + extra_columns].copy()
-        sample_mask = work[variables].notna().all(axis=1)
+        work = add_model_derived_terms(work, model_terms)
+        filter_mask = sample_filter_mask(work, spec, scope_dir_for_spec(panel_dir, spec))
+        sample_mask = filter_mask & work[model_terms].notna().all(axis=1)
         if spec.weight_variable:
             sample_mask = sample_mask & safe_numeric(work[spec.weight_variable]).gt(0)
         sample = work[sample_mask].copy()
@@ -189,6 +206,8 @@ def build_model_samples(
 
         row = model_sample_summary(spec, sample, len(df), path, output_path)
         row["missing_variables"] = ""
+        row["sample_filter"] = spec.sample_filter
+        row["filter_notes"] = spec.filter_notes
         manifest_rows.append(row)
 
     manifest = pd.DataFrame(manifest_rows)

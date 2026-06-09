@@ -1,6 +1,6 @@
 # Pre-estimation readiness
 
-This note records the checks that now run before fixed-effects estimation is added. The goal is to make model samples explicit before any regression code can drop rows silently.
+This note records the checks that run before fixed-effects estimation. The goal is to make model samples explicit before any regression code can drop rows silently.
 
 Run:
 
@@ -18,7 +18,7 @@ The script writes:
 - one complete-case parquet for each model under `outputs/model_samples/samples/`
 - `outputs/model_samples/model_sample_summary.json`
 
-The latest local run wrote all 10 planned model samples and found no missing model variables.
+The latest local run wrote all 15 planned model samples and found no missing model variables.
 
 ## Current model samples
 
@@ -30,10 +30,15 @@ The latest local run wrote all 10 planned model samples and found no missing mod
 | `fe_pell_share` | 24,125 | 2,075 | 47 | 16 |
 | `fe_federal_loan_per_student` | 24,247 | 2,082 | 44 | 44 |
 | `fe_weighted_inst_grant` | 24,247 | 2,082 | 44 | 44 |
+| `pooled_sector_interaction_inst_grant` | 24,247 | 2,082 | 44 | 44 |
 | `fe_net_price_low_income` | 21,296 | 2,025 | 48 | 43 |
 | `selectivity_inst_grant` | 15,201 | 1,459 | 51 | 18 |
 | `public_inst_grant` | 8,626 | 713 | 13 | 13 |
 | `private_np_inst_grant` | 15,621 | 1,371 | 31 | 33 |
+| `sensitivity_min_years_10_inst_grant` | 22,654 | 1,751 | 9 | 14 |
+| `sensitivity_balanced_inst_grant` | 20,996 | 1,590 | 7 | 11 |
+| `sensitivity_metadata_clean_inst_grant` | 20,311 | 2,041 | 54 | 45 |
+| `sensitivity_no_suspect_zero_inst_grant` | 23,222 | 2,078 | 55 | 46 |
 
 All weighted samples have zero nonpositive-weight rows in the current manifest.
 
@@ -52,7 +57,7 @@ For the main institutional-grant dollar model, the source panel has 35,443 rows.
 
 ## What this means for estimation
 
-The model samples are ready for fixed-effects code. The estimator should still report:
+The model samples feed `scripts/run_fixed_effects.py`. The estimator reports:
 
 - rows and institutions used by each model
 - singleton institutions

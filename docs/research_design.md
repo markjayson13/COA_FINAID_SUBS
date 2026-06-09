@@ -83,10 +83,10 @@ Start with sector-specific trends in COA components and aid outcomes. The goal i
 Required exhibits:
 
 - COA and headroom trend table by sector
-- component decomposition of COA growth
+- component decomposition of COA growth from `docs/descriptive_decomposition.md`
 - headroom-measure coverage, correlations, invalid-share counts, and FTFT-cohort-weighted means from `docs/headroom_measurement_audit.md`
 - descriptive statistics before and after table-only winsorization
-- complete-case counts for each planned model
+- complete-case counts and materialized model samples from `docs/pre_estimation_readiness.md`
 - aid-zero and metadata exposure summaries for model samples
 
 ### Stage 2: baseline institution fixed effects
@@ -155,7 +155,6 @@ Not allowed from IPEDS alone:
 
 ## Next implementation steps
 
-1. Build a model-plan audit from `config/model_specifications.csv`.
-2. Write the first descriptive decomposition script.
-3. Add `config/policy_shocks.csv` only after every shock date and source is verified.
-4. Add fixed-effects estimation after model samples and complete-case counts are stable.
+1. Add fixed-effects estimation using the materialized model samples.
+2. Add `config/policy_shocks.csv` only after every shock date and source is verified.
+3. Keep policy-exposure designs separate from the baseline fixed-effects estimates.

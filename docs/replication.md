@@ -97,6 +97,16 @@ This writes coverage, sector-year, correlation, and FTFT-cohort-weighted summari
 
 The current checked-in summary of those generated files is `docs/headroom_measurement_audit.md`.
 
+To rebuild the first descriptive decomposition:
+
+```bash
+PYTHONPATH=src python scripts/build_descriptive_decomposition.py \
+  --panel-dir outputs/analysis_panel \
+  --output-dir outputs/descriptive_decomposition
+```
+
+This writes sector-year trends and same-institution COA component changes. The current checked-in summary is `docs/descriptive_decomposition.md`.
+
 To audit distributions and extreme values after the panels are built:
 
 ```bash
@@ -132,4 +142,15 @@ PYTHONPATH=src python scripts/audit_model_plan.py \
 
 This writes complete-case counts and missing-variable checks for the model plan. It does not estimate regressions.
 
-The exact row count depends on the upstream panel file hash. With the local input I verified on June 8, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 335 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.
+To materialize complete-case samples for the planned models:
+
+```bash
+PYTHONPATH=src python scripts/build_model_samples.py \
+  --panel-dir outputs/analysis_panel \
+  --output-dir outputs/model_samples \
+  --config config/model_specifications.csv
+```
+
+This writes one complete-case parquet per model and a sample manifest. The current checked-in summary is `docs/pre_estimation_readiness.md`.
+
+The exact row count depends on the upstream panel file hash. With the local input I verified on June 9, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 355 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

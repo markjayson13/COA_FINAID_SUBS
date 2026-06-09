@@ -60,6 +60,8 @@ Before writing the analysis panel, the script checks:
 - documented exclusion of ordinary enrollment and race-share controls with unusable local coverage
 - nonnegative checks for core COA and aid money variables
 - headroom-measure coverage, component, correlation, and FTFT-cohort-weighted summaries
+- sector-year descriptive decomposition and same-institution COA component changes
+- complete-case model samples with singleton and within-variation diagnostics
 - aid-zero consistency checks across counts, percentages, averages, and totals
 - all-variable distribution and extreme-value audit before any winsorization decision
 - raw net-price values retained
@@ -75,6 +77,8 @@ Admissions variables are handled in two layers. `OPENADMP` is kept in the baseli
 Ordinary enrollment and race-share controls are not used in the current baseline. The local clean panel does not provide usable coverage for `ENRTOT`, `FTE`, or the `PCTENR*` race-share family in this analysis sample. I keep the student-body controls to fields with usable coverage in the current extract, mainly SFA cohort counts and institutional flags. If the upstream panel later restores ordinary enrollment and race-share coverage, those controls should enter as a documented sensitivity, not as an undocumented change to the baseline.
 
 Headroom is handled as a family of measures. `HEADROOM_MAIN` is the preferred published non-tuition COA margin. The audit checks its normalized versions, its component fields, its living-arrangement alternatives, and `SCFA1N`-weighted means. This keeps the paper from relying on a single unaudited aggregate field.
+
+The descriptive decomposition holds institutions fixed for component-change tables. That prevents panel entry or exit from being confused with COA growth. Model samples are also materialized before estimation so complete-case decisions are visible outside the regression code.
 
 The metadata fields are kept in two forms. The raw `IMP_*`, `LOCK_*`, `REV_*`, `IDX_*`, `PRCH_*`, and parent-child allocation fields remain in the extract. The script also writes conservative derived flags. A component is flagged as imputed when its `IMP_*` code is neither the baseline reported code nor the not-applicable code. It is flagged as revised when `REV_*` equals one. It is flagged as parent-linked when IPEDS reports a parent `UNITID` in `IDX_*` or a positive parent-child allocation factor. The audit also writes raw code counts for `IMP_*`, `LOCK_*`, `REV_*`, and `PRCH_*` fields.
 

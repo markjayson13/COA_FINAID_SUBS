@@ -9,9 +9,11 @@ import pytest
 
 from coa_finaid_subs.audit_extremes import audit_extremes
 from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
+from coa_finaid_subs.descriptive_decomposition import build_descriptive_decomposition
 from coa_finaid_subs.descstat_tables import build_descstat_tables
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
+from coa_finaid_subs.model_samples import build_model_samples
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
 
@@ -881,3 +883,191 @@ def test_headroom_measure_audit_reports_weighted_coverage_and_share_flags(tmp_pa
 
     by_sector_year = pd.read_csv(paths["by_sector_year"])
     assert {"public", "private_nonprofit"} <= set(by_sector_year["sector"])
+
+
+def test_descriptive_decomposition_pairs_same_institutions_and_components(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis_panel_coa_headroom_2009_2010_public_private_nonprofit.parquet"
+    output_dir = tmp_path / "descriptive_decomposition"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "SCFA1N": 100,
+            "CHG2AY0": 10_000.0,
+            "CHG4AY0": 1_000.0,
+            "CHG7AY0": 7_000.0,
+            "CHG8AY0": 2_000.0,
+            "COA_MAIN": 20_000.0,
+            "HEADROOM_MAIN": 10_000.0,
+            "HEADROOM_MAIN_SHARE_COA": 0.50,
+            "HEADROOM_MAIN_SHARE_TUITION": 1.00,
+            "IGRNT_PER_FTFT_COHORT": 100.0,
+            "PGRNT_PER_FTFT_COHORT": 200.0,
+        },
+        {
+            "year": 2010,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "SCFA1N": 100,
+            "CHG2AY0": 10_500.0,
+            "CHG4AY0": 1_100.0,
+            "CHG7AY0": 8_000.0,
+            "CHG8AY0": 2_400.0,
+            "COA_MAIN": 22_000.0,
+            "HEADROOM_MAIN": 11_500.0,
+            "HEADROOM_MAIN_SHARE_COA": 11_500.0 / 22_000.0,
+            "HEADROOM_MAIN_SHARE_TUITION": 11_500.0 / 10_500.0,
+            "IGRNT_PER_FTFT_COHORT": 110.0,
+            "PGRNT_PER_FTFT_COHORT": 210.0,
+        },
+        {
+            "year": 2009,
+            "UNITID": 2,
+            "SECTOR": 2,
+            "SCFA1N": 300,
+            "CHG2AY0": 20_000.0,
+            "CHG4AY0": 1_500.0,
+            "CHG7AY0": 9_000.0,
+            "CHG8AY0": 3_000.0,
+            "COA_MAIN": 33_500.0,
+            "HEADROOM_MAIN": 13_500.0,
+            "HEADROOM_MAIN_SHARE_COA": 13_500.0 / 33_500.0,
+            "HEADROOM_MAIN_SHARE_TUITION": 13_500.0 / 20_000.0,
+            "IGRNT_PER_FTFT_COHORT": 300.0,
+            "PGRNT_PER_FTFT_COHORT": 400.0,
+        },
+        {
+            "year": 2010,
+            "UNITID": 2,
+            "SECTOR": 2,
+            "SCFA1N": 300,
+            "CHG2AY0": 22_000.0,
+            "CHG4AY0": 1_600.0,
+            "CHG7AY0": 9_300.0,
+            "CHG8AY0": 3_300.0,
+            "COA_MAIN": 36_200.0,
+            "HEADROOM_MAIN": 14_200.0,
+            "HEADROOM_MAIN_SHARE_COA": 14_200.0 / 36_200.0,
+            "HEADROOM_MAIN_SHARE_TUITION": 14_200.0 / 22_000.0,
+            "IGRNT_PER_FTFT_COHORT": 320.0,
+            "PGRNT_PER_FTFT_COHORT": 420.0,
+        },
+    ]
+    write_parquet(panel_path, rows)
+
+    paths = build_descriptive_decomposition(panel_dir=panel_dir, output_dir=output_dir)
+
+    trends = pd.read_csv(paths["trends"])
+    public_2010 = trends[
+        trends["scope"].eq("public_private_nonprofit")
+        & trends["sector"].eq("public")
+        & trends["year"].eq(2010)
+        & trends["varname"].eq("COA_MAIN")
+    ].iloc[0]
+    assert int(public_2010["nonnull_rows"]) == 1
+    assert public_2010["mean"] == pytest.approx(22_000.0)
+
+    adjacent = pd.read_csv(paths["adjacent_changes"])
+    public = adjacent[adjacent["sector"].eq("public")].iloc[0]
+    assert int(public["paired_institutions"]) == 1
+    assert public["mean_coa_main_change"] == pytest.approx(2_000.0)
+    assert public["mean_headroom_main_change"] == pytest.approx(1_500.0)
+    assert public["mean_tuition_fees_change"] == pytest.approx(500.0)
+    assert public["mean_books_supplies_change"] == pytest.approx(100.0)
+    assert public["mean_off_nf_room_board_change"] == pytest.approx(1_000.0)
+    assert public["mean_off_nf_other_expenses_change"] == pytest.approx(400.0)
+    assert public["mean_coa_change_minus_component_sum"] == pytest.approx(0.0)
+    assert public["mean_headroom_change_minus_allowance_sum"] == pytest.approx(0.0)
+
+    all_rows = adjacent[adjacent["sector"].eq("all")].iloc[0]
+    assert int(all_rows["paired_institutions"]) == 2
+    assert all_rows["ftft_weighted_coa_main_change"] == pytest.approx((2_000.0 * 100 + 2_700.0 * 300) / 400)
+
+
+def test_model_sample_builder_materializes_complete_case_samples(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis.parquet"
+    config_path = tmp_path / "model_specifications.csv"
+    output_dir = tmp_path / "model_samples"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "CONTROL": 1,
+            "STABBR": "NV",
+            "IGRNT_PER_FTFT_COHORT": 100.0,
+            "HEADROOM_MAIN": 10_000.0,
+            "OPEN_ADMISSIONS_FLAG": False,
+            "LN_SCFA1N": 4.0,
+            "SCFA1N": 50,
+        },
+        {
+            "year": 2010,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "CONTROL": 1,
+            "STABBR": "NV",
+            "IGRNT_PER_FTFT_COHORT": 110.0,
+            "HEADROOM_MAIN": 10_000.0,
+            "OPEN_ADMISSIONS_FLAG": False,
+            "LN_SCFA1N": 4.1,
+            "SCFA1N": 55,
+        },
+        {
+            "year": 2010,
+            "UNITID": 2,
+            "SECTOR": 2,
+            "CONTROL": 2,
+            "STABBR": "CA",
+            "IGRNT_PER_FTFT_COHORT": 200.0,
+            "HEADROOM_MAIN": 12_000.0,
+            "OPEN_ADMISSIONS_FLAG": True,
+            "LN_SCFA1N": 4.2,
+            "SCFA1N": 0,
+        },
+        {
+            "year": 2010,
+            "UNITID": 3,
+            "SECTOR": 2,
+            "CONTROL": 2,
+            "STABBR": "AZ",
+            "IGRNT_PER_FTFT_COHORT": None,
+            "HEADROOM_MAIN": 13_000.0,
+            "OPEN_ADMISSIONS_FLAG": True,
+            "LN_SCFA1N": 4.3,
+            "SCFA1N": 60,
+        },
+    ]
+    write_parquet(panel_path, rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "test_model,weighted_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,OPEN_ADMISSIONS_FLAG;LN_SCFA1N,SCFA1N,UNITID;year,UNITID,main,Test sample.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = build_model_samples(panel_dir=panel_dir, output_dir=output_dir, config=config_path)
+
+    manifest = pd.read_csv(paths["manifest"])
+    row = manifest.iloc[0]
+    assert int(row["sample_rows"]) == 2
+    assert int(row["sample_institutions"]) == 1
+    assert int(row["singleton_institutions"]) == 0
+    assert int(row["institutions_without_focal_within_variation"]) == 1
+    assert int(row["nonpositive_weight_rows"]) == 0
+    assert row["missing_variables"] == "" or pd.isna(row["missing_variables"])
+
+    sample = pd.read_parquet(paths["sample_dir"] / "test_model.parquet")
+    assert sample["UNITID"].tolist() == [1, 1]
+    assert set(sample["model_id"]) == {"test_model"}
+
+    missingness = pd.read_csv(paths["missingness"])
+    outcome = missingness[missingness["varname"].eq("IGRNT_PER_FTFT_COHORT")].iloc[0]
+    assert int(outcome["missing_rows"]) == 1

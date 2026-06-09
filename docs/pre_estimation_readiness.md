@@ -20,6 +20,13 @@ The script writes:
 
 The latest local run wrote all 15 planned model samples and found no missing model variables.
 
+The baseline estimation validator also passed after the refreshed model samples were estimated:
+
+```text
+15 models observed
+0 validation issues
+```
+
 ## Current model samples
 
 | Model | Rows | Institutions | Singleton institutions | Institutions without focal within variation |

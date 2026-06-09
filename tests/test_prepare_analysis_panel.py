@@ -12,6 +12,7 @@ from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_v
 from coa_finaid_subs.descriptive_decomposition import build_descriptive_decomposition
 from coa_finaid_subs.descstat_tables import build_descstat_tables
 from coa_finaid_subs.estimate_tables import build_estimate_tables
+from coa_finaid_subs.estimation_validation import validate_fixed_effects_outputs
 from coa_finaid_subs.fixed_effects import run_fixed_effects
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
@@ -1420,8 +1421,69 @@ def test_policy_exposure_builder_writes_exposure_panels(tmp_path: Path) -> None:
     assert paths["public_private_nonprofit_panel"].exists()
     panel = pd.read_parquet(paths["public_private_nonprofit_panel"])
     assert "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
+    assert "PELL_PER_FTFT_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
+    assert "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016" in panel.columns
+    assert "PLACEBO_2016_WINDOW" in panel.columns
     assert panel["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna().sum() == len(panel)
     assert panel.loc[panel["year"].eq(2016), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].eq(0).all()
     assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].abs().sum() > 0
+    assert panel.loc[panel["year"].eq(2015), "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"].eq(0).all()
+    assert panel.loc[panel["year"].eq(2016), "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"].abs().sum() > 0
     summary = pd.read_json(paths["summary_json"], typ="series")
     assert int(summary["issue_count"]) == 0
+
+
+def test_estimation_validation_fails_tiny_focal_standard_error(tmp_path: Path) -> None:
+    fixed_dir = tmp_path / "fixed_effects"
+    fixed_dir.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "model_id": "bad_model",
+                "stage": "test",
+                "role": "test",
+                "sample_filter": "",
+                "term": "FOCAL",
+                "is_focal": True,
+                "estimate": 1.0,
+                "std_error": 0.0,
+                "t_stat": 1_000_000.0,
+                "p_value_normal": 0.0,
+                "nobs": 100,
+                "clusters": 20,
+                "fixed_effects": "UNITID;year",
+                "weight_variable": "",
+                "within_r_squared": 0.1,
+                "matrix_rank": 1,
+                "rank_deficient": False,
+            }
+        ]
+    ).to_csv(fixed_dir / "fixed_effects_coefficients.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "bad_model",
+                "estimation_rows": 100,
+                "institutions": 20,
+                "clusters": 20,
+                "singleton_clusters": 0,
+                "groups_without_focal_within_variation": 0,
+                "k_parameters": 1,
+                "matrix_rank": 1,
+                "rank_deficient": False,
+                "absorbed_iterations": 1_000,
+                "absorbed_last_change": 1e-6,
+                "within_r_squared": 0.1,
+                "residual_df": 99,
+                "smallest_singular_value": 1.0,
+                "status": "estimated",
+            }
+        ]
+    ).to_csv(fixed_dir / "fixed_effects_model_diagnostics.csv", index=False)
+    (fixed_dir / "fixed_effects_summary.json").write_text('{"models_estimated": 1}', encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        validate_fixed_effects_outputs(fixed_effects_dir=fixed_dir, output_dir=tmp_path / "validation", min_clusters=50)
+
+    issues = pd.read_csv(tmp_path / "validation" / "estimation_validation_issues.csv")
+    assert {"tiny_focal_std_error", "extreme_focal_t_stat", "absorption_iteration_cap"} <= set(issues["check"])

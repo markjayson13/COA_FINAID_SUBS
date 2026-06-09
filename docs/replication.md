@@ -221,4 +221,24 @@ PYTHONPATH=src python scripts/run_fixed_effects.py \
   --config config/policy_exposure_model_specifications.csv
 ```
 
+To validate fixed-effects outputs before paper use:
+
+```bash
+PYTHONPATH=src python scripts/validate_fixed_effects_outputs.py \
+  --fixed-effects-dir outputs/fixed_effects \
+  --output-dir outputs/baseline_estimation_validation \
+  --config config/model_specifications.csv
+```
+
+For the policy-exposure models, the hard validation command is:
+
+```bash
+PYTHONPATH=src python scripts/validate_fixed_effects_outputs.py \
+  --fixed-effects-dir outputs/policy_fixed_effects \
+  --output-dir outputs/policy_estimation_validation \
+  --config config/policy_exposure_model_specifications.csv
+```
+
+That policy validation currently flags the 2016 institutional-grant placebo check. To inspect only numerical estimation checks, pass `--skip-placebo-signal-check`.
+
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 9, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 355 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

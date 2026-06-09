@@ -9,6 +9,11 @@ PYTHONPATH=src python scripts/run_fixed_effects.py \
   --sample-dir outputs/model_samples/samples \
   --output-dir outputs/fixed_effects \
   --config config/model_specifications.csv
+
+PYTHONPATH=src python scripts/validate_fixed_effects_outputs.py \
+  --fixed-effects-dir outputs/fixed_effects \
+  --output-dir outputs/baseline_estimation_validation \
+  --config config/model_specifications.csv
 ```
 
 The script writes:
@@ -17,6 +22,7 @@ The script writes:
 - `outputs/fixed_effects/fixed_effects_focal_coefficients.csv`
 - `outputs/fixed_effects/fixed_effects_model_diagnostics.csv`
 - `outputs/fixed_effects/fixed_effects_summary.json`
+- `outputs/baseline_estimation_validation/estimation_validation_summary.json`
 
 Generated outputs remain outside Git. This note records the current local run so the paper trail is visible.
 
@@ -46,7 +52,7 @@ The p-values are normal-reference p-values from the clustered standard errors. T
 | `pooled_sector_interaction_inst_grant` | sector interaction | `HEADROOM_MAIN_X_PRIVATE_NONPROFIT` | 0.7586 | 0.0380 | 19.99 | 24,247 | 2,082 |
 | `fe_net_price_low_income` | secondary | `HEADROOM_MAIN` | 0.4218 | 0.0297 | 14.22 | 21,296 | 2,025 |
 | `selectivity_inst_grant` | sensitivity | `HEADROOM_MAIN` | 0.1103 | 0.0308 | 3.59 | 15,201 | 1,459 |
-| `public_inst_grant` | sector | `HEADROOM_MAIN` | -0.0046 | 0.0138 | -0.33 | 8,626 | 713 |
+| `public_inst_grant` | sector | `HEADROOM_MAIN` | -0.0058 | 0.0136 | -0.42 | 8,626 | 713 |
 | `private_np_inst_grant` | sector | `HEADROOM_MAIN` | 0.1736 | 0.0284 | 6.12 | 15,621 | 1,371 |
 | `sensitivity_min_years_10_inst_grant` | sensitivity | `HEADROOM_MAIN` | 0.1403 | 0.0241 | 5.81 | 22,654 | 1,751 |
 | `sensitivity_balanced_inst_grant` | sensitivity | `HEADROOM_MAIN` | 0.1489 | 0.0257 | 5.80 | 20,996 | 1,590 |
@@ -70,7 +76,7 @@ All 15 planned models estimated and no model was rank deficient.
 | `pooled_sector_interaction_inst_grant` | 44 | 44 | 0.1036 |
 | `fe_net_price_low_income` | 48 | 43 | 0.0595 |
 | `selectivity_inst_grant` | 51 | 18 | 0.0135 |
-| `public_inst_grant` | 13 | 13 | 0.0081 |
+| `public_inst_grant` | 13 | 13 | 0.0067 |
 | `private_np_inst_grant` | 31 | 33 | 0.0233 |
 | `sensitivity_min_years_10_inst_grant` | 9 | 14 | 0.0158 |
 | `sensitivity_balanced_inst_grant` | 7 | 11 | 0.0155 |
@@ -82,5 +88,7 @@ The low within R-squared values are expected for institution fixed-effects model
 ## Paper-use boundary
 
 The main table should report the public and private nonprofit estimates separately, then show the pooled baseline and the pooled interaction as reference checks. The current results point to different sector patterns: the public-sector estimate is near zero in the sector-specific model, while the private nonprofit estimate is positive. The pooled interaction uses common control coefficients and should not replace the sector-specific estimates.
+
+The refreshed public-sector FE specification excludes raw `FIN_STATE_LOCAL_APPROPS_PUBLIC`. The variable remains in the analysis panel for descriptive and diagnostic work, but its raw dollar level caused unstable absorbed fixed-effect estimation when used as a default control. The baseline validation now reports zero estimation issues across all 15 configured models.
 
 `scripts/build_estimate_tables.py` now exports the current fixed-effects table to CSV, LaTeX, and Word under `outputs/estimate_tables/`.

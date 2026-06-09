@@ -116,6 +116,10 @@ def filter_source_variables(spec: ModelSpec) -> list[str]:
         return ["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]
     if spec.sample_filter in {"min_years_10", "balanced_full_window", "no_suspect_aid_zero", "yrp_2017_window"}:
         return ["UNITID", "year"]
+    if spec.sample_filter == "yrp_2017_window_pre3":
+        return ["UNITID", "year", "PELL_EXPOSURE_PRE2017_YEARS_OBSERVED"]
+    if spec.sample_filter in {"yrp_2017_window_no_2020_2021", "placebo_2016_window"}:
+        return ["UNITID", "year"]
     return []
 
 
@@ -203,6 +207,21 @@ def sample_filter_mask(frame: pd.DataFrame, spec: ModelSpec, scope_dir: Path) ->
     if spec.sample_filter == "yrp_2017_window":
         years = pd.to_numeric(frame["year"], errors="coerce")
         return years.between(2014, 2023)
+
+    if spec.sample_filter == "yrp_2017_window_pre3":
+        if "PELL_EXPOSURE_PRE2017_YEARS_OBSERVED" not in frame.columns:
+            raise ValueError("yrp_2017_window_pre3 filter requires PELL_EXPOSURE_PRE2017_YEARS_OBSERVED")
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        pre_years = pd.to_numeric(frame["PELL_EXPOSURE_PRE2017_YEARS_OBSERVED"], errors="coerce")
+        return years.between(2014, 2023) & pre_years.ge(3)
+
+    if spec.sample_filter == "yrp_2017_window_no_2020_2021":
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        return years.between(2014, 2023) & ~years.isin([2020, 2021])
+
+    if spec.sample_filter == "placebo_2016_window":
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        return years.between(2014, 2016)
 
     raise ValueError(f"Unknown sample_filter for {spec.model_id}: {spec.sample_filter}")
 

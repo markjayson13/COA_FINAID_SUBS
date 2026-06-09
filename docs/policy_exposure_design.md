@@ -40,6 +40,17 @@ PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017
 
 This equals the standardized pre-period Pell exposure multiplied by an indicator for 2017 or later.
 
+## Sensitivity checks
+
+The first sensitivity set adds:
+
+- an alternative exposure based on pre-2017 Pell dollars per FTFT student
+- a sample requiring all three pre-period exposure years
+- a sample that excludes 2020 and 2021
+- a 2016 placebo check using 2014-2015 Pell exposure
+
+The placebo check is a pre-trend diagnostic. A sharp placebo coefficient means the policy-exposure design is detecting differential movement before the 2017 policy event.
+
 ## Why this design comes before estimation
 
 The Pell schedule is national, so year fixed effects absorb the national policy timing. The estimable object is differential change by pre-period exposure:
@@ -58,6 +69,7 @@ The coefficient does not say that the policy changed one institution and not ano
 - `config/policy_exposure_model_specifications.csv` defines the first policy-exposure models.
 - `scripts/build_policy_exposure_panels.py` writes the exposure panels and audit files.
 - `src/coa_finaid_subs/policy_exposures.py` contains the exposure construction.
+- `scripts/validate_fixed_effects_outputs.py` checks estimation outputs for numerical and placebo-design problems.
 
 Generated files are written under `outputs/policy_exposure/` and are not committed.
 

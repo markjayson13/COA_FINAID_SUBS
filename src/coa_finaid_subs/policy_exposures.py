@@ -108,6 +108,18 @@ def within_group_zscore(values: pd.Series, groups: pd.Series, eligible: pd.Serie
     return result
 
 
+def add_exposure_zscores(unit: pd.DataFrame, exposure_inputs: dict[str, str], sector_col: str, min_years: int) -> pd.DataFrame:
+    result = unit.copy()
+    for exposure_name in exposure_inputs:
+        count_col = f"{exposure_name}_YEARS_OBSERVED"
+        z_col = f"{exposure_name}_Z_SECTOR"
+        min_col = f"{exposure_name}_HAS_MIN_YEARS"
+        result[min_col] = safe_numeric(result[count_col]).ge(min_years) if count_col in result.columns else False
+        eligible = result[min_col] & result[exposure_name].notna()
+        result[z_col] = within_group_zscore(result[exposure_name], result[sector_col], eligible)
+    return result
+
+
 def build_unit_exposures(panel: pd.DataFrame, design: pd.Series) -> pd.DataFrame:
     pre_start = int(design["pre_start"])
     pre_end = int(design["pre_end"])
@@ -122,23 +134,54 @@ def build_unit_exposures(panel: pd.DataFrame, design: pd.Series) -> pd.DataFrame
     pre["year"] = safe_numeric(pre["year"])
     pre["SECTOR"] = safe_numeric(pre["SECTOR"])
 
-    aggregations: dict[str, str] = {"year": "nunique", "SECTOR": "last"}
+    aggregations: dict[str, object] = {"year": "nunique", "SECTOR": "last"}
     for source in EXPOSURE_INPUTS.values():
         if source in pre.columns:
-            aggregations[source] = "mean"
+            aggregations[source] = ["mean", "count"]
     unit = pre.sort_values(["UNITID", "year"]).groupby("UNITID", dropna=True).agg(aggregations).reset_index()
-    unit = unit.rename(columns={"year": "EXPOSURE_PRE2017_YEARS_OBSERVED", "SECTOR": "EXPOSURE_SECTOR_PRE2017"})
+    unit.columns = [
+        "_".join(str(part) for part in col if str(part)) if isinstance(col, tuple) else str(col)
+        for col in unit.columns
+    ]
+    unit = unit.rename(columns={"year_nunique": "EXPOSURE_PRE2017_YEARS_OBSERVED", "SECTOR_last": "EXPOSURE_SECTOR_PRE2017"})
     for exposure_name, source in EXPOSURE_INPUTS.items():
-        if source in unit.columns:
-            unit = unit.rename(columns={source: exposure_name})
+        mean_col = f"{source}_mean"
+        count_col = f"{source}_count"
+        if mean_col in unit.columns:
+            unit = unit.rename(columns={mean_col: exposure_name, count_col: f"{exposure_name}_YEARS_OBSERVED"})
         else:
             unit[exposure_name] = np.nan
+            unit[f"{exposure_name}_YEARS_OBSERVED"] = 0
 
-    unit["EXPOSURE_PRE2017_HAS_MIN_YEARS"] = safe_numeric(unit["EXPOSURE_PRE2017_YEARS_OBSERVED"]).ge(min_pre_years)
-    eligible = unit["EXPOSURE_PRE2017_HAS_MIN_YEARS"] & unit["PELL_EXPOSURE_PRE2017"].notna()
-    unit["PELL_EXPOSURE_PRE2017_Z_SECTOR"] = within_group_zscore(
-        unit["PELL_EXPOSURE_PRE2017"],
-        unit["EXPOSURE_SECTOR_PRE2017"],
+    unit = add_exposure_zscores(unit, EXPOSURE_INPUTS, "EXPOSURE_SECTOR_PRE2017", min_pre_years)
+    unit["EXPOSURE_PRE2017_HAS_MIN_YEARS"] = unit["PELL_EXPOSURE_PRE2017_HAS_MIN_YEARS"]
+    return unit
+
+
+def build_placebo_exposures(panel: pd.DataFrame) -> pd.DataFrame:
+    pre = panel.loc[safe_numeric(panel["year"]).between(2014, 2015)].copy()
+    if pre.empty:
+        return pd.DataFrame(columns=["UNITID"])
+    source = "PELL_SHARE_OF_TOTAL_GRANT_FTFT"
+    pre[source] = safe_numeric(pre[source])
+    pre["year"] = safe_numeric(pre["year"])
+    pre["SECTOR"] = safe_numeric(pre["SECTOR"])
+    unit = (
+        pre.sort_values(["UNITID", "year"])
+        .groupby("UNITID", dropna=True)
+        .agg(
+            EXPOSURE_PRE2016_YEARS_OBSERVED=("year", "nunique"),
+            EXPOSURE_SECTOR_PRE2016=("SECTOR", "last"),
+            PELL_EXPOSURE_PRE2016=(source, "mean"),
+            PELL_EXPOSURE_PRE2016_YEARS_OBSERVED=(source, "count"),
+        )
+        .reset_index()
+    )
+    unit["PELL_EXPOSURE_PRE2016_HAS_MIN_YEARS"] = safe_numeric(unit["PELL_EXPOSURE_PRE2016_YEARS_OBSERVED"]).ge(2)
+    eligible = unit["PELL_EXPOSURE_PRE2016_HAS_MIN_YEARS"] & unit["PELL_EXPOSURE_PRE2016"].notna()
+    unit["PELL_EXPOSURE_PRE2016_Z_SECTOR"] = within_group_zscore(
+        unit["PELL_EXPOSURE_PRE2016"],
+        unit["EXPOSURE_SECTOR_PRE2016"],
         eligible,
     )
     return unit
@@ -160,16 +203,27 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
 
     unit_exposures = build_unit_exposures(work, design)
     work = work.merge(unit_exposures, how="left", on="UNITID")
+    placebo_exposures = build_placebo_exposures(work)
+    if not placebo_exposures.empty:
+        work = work.merge(placebo_exposures, how="left", on="UNITID")
     work["POST_YRP_2017"] = work["year"].ge(post_start)
     work["YRP_2017_WINDOW"] = work["year"].between(pre_start, post_end)
     work["YRP_2017_EVENT_YEAR"] = work["year"].eq(event_year)
+    work["YRP_2017_WINDOW_PRE3"] = work["YRP_2017_WINDOW"] & safe_numeric(work["PELL_EXPOSURE_PRE2017_YEARS_OBSERVED"]).ge(3)
+    work["YRP_2017_WINDOW_NO_2020_2021"] = work["YRP_2017_WINDOW"] & ~work["year"].isin([2020, 2021])
+    work["POST_PLACEBO_2016"] = work["year"].ge(2016)
+    work["PLACEBO_2016_WINDOW"] = work["year"].between(2014, 2016)
     work["PELL_MAX_AWARD_DELTA_100"] = safe_numeric(work["POLICY_PELL_MAX_AWARD_DELTA"]) / 100.0
-    work["PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"] = (
-        safe_numeric(work["PELL_EXPOSURE_PRE2017_Z_SECTOR"]) * work["POST_YRP_2017"].astype(float)
-    )
-    work["PELL_EXPOSURE_PRE2017_Z_X_PELL_MAX_AWARD_DELTA_100"] = (
-        safe_numeric(work["PELL_EXPOSURE_PRE2017_Z_SECTOR"]) * safe_numeric(work["PELL_MAX_AWARD_DELTA_100"])
-    )
+    for exposure_name in EXPOSURE_INPUTS:
+        z_col = f"{exposure_name}_Z_SECTOR"
+        if z_col not in work.columns:
+            continue
+        work[f"{exposure_name}_Z_X_POST_YRP_2017"] = safe_numeric(work[z_col]) * work["POST_YRP_2017"].astype(float)
+        work[f"{exposure_name}_Z_X_PELL_MAX_AWARD_DELTA_100"] = safe_numeric(work[z_col]) * safe_numeric(work["PELL_MAX_AWARD_DELTA_100"])
+    if "PELL_EXPOSURE_PRE2016_Z_SECTOR" in work.columns:
+        work["PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"] = (
+            safe_numeric(work["PELL_EXPOSURE_PRE2016_Z_SECTOR"]) * work["POST_PLACEBO_2016"].astype(float)
+        )
 
     window = work[work["YRP_2017_WINDOW"]].copy()
     if window.empty:
@@ -180,15 +234,19 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
         issues.append("Main policy exposure interaction has no usable variation")
     if unit_exposures.empty or unit_exposures["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna().sum() == 0:
         issues.append("No institutions have a usable pre-2017 Pell exposure")
+    if placebo_exposures.empty or placebo_exposures["PELL_EXPOSURE_PRE2016_Z_SECTOR"].notna().sum() == 0:
+        issues.append("No institutions have a usable pre-2016 placebo Pell exposure")
 
     audit = work.copy()
     audit["EXPOSURE_AVAILABLE"] = audit["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna()
+    audit["PLACEBO_EXPOSURE_AVAILABLE"] = audit.get("PELL_EXPOSURE_PRE2016_Z_SECTOR", pd.Series(np.nan, index=audit.index)).notna()
     by_year = (
         audit.groupby(["year", "SECTOR"], dropna=False)
         .agg(
             institution_years=("UNITID", "size"),
             institutions=("UNITID", "nunique"),
             exposure_available_rows=("EXPOSURE_AVAILABLE", "sum"),
+            placebo_exposure_available_rows=("PLACEBO_EXPOSURE_AVAILABLE", "sum"),
             policy_pell_max_award=("POLICY_PELL_MAX_AWARD", "first"),
             policy_pell_max_award_delta=("POLICY_PELL_MAX_AWARD_DELTA", "first"),
             post_yrp_2017=("POST_YRP_2017", "first"),
@@ -246,6 +304,7 @@ def build_policy_exposure_panels(
                 "window_rows": int(len(window)),
                 "window_institutions": int(window["UNITID"].nunique(dropna=True)) if not window.empty else 0,
                 "exposure_institutions": int(unit_audit["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna().sum()) if not unit_audit.empty else 0,
+                "pre3_exposure_institutions": int(unit_audit["PELL_EXPOSURE_PRE2017_YEARS_OBSERVED"].ge(3).sum()) if not unit_audit.empty else 0,
                 "pre_start": int(design["pre_start"]),
                 "pre_end": int(design["pre_end"]),
                 "post_start": int(design["post_start"]),

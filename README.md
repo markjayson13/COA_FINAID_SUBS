@@ -50,6 +50,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, LaTeX, and Word.
 - `scripts/build_policy_exposure_panels.py` builds audited pre-period exposure panels for policy-exposure models.
 - `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
+- `scripts/validate_fixed_effects_outputs.py` checks fixed-effects outputs before paper use.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
@@ -217,6 +218,8 @@ The policy-exposure model gate and estimator write:
 - `outputs/policy_fixed_effects/fixed_effects_focal_coefficients.csv`
 - `outputs/policy_fixed_effects/fixed_effects_model_diagnostics.csv`
 - `outputs/policy_fixed_effects/fixed_effects_summary.json`
+- `outputs/baseline_estimation_validation/estimation_validation_summary.json`
+- `outputs/policy_estimation_validation/estimation_validation_summary.json`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

@@ -159,6 +159,6 @@ Not allowed from IPEDS alone:
 
 ## Next implementation steps
 
-1. Run the policy-exposure model gate and estimate only from the audited exposure samples.
+1. Tighten the institutional-grant policy design before treating that estimate as causal, because the 2016 placebo check is not clean.
 2. Keep policy-exposure estimates separate from the baseline fixed-effects estimates.
 3. Add manuscript exhibit scripts only after the paper table order is fixed.

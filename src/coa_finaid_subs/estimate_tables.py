@@ -22,10 +22,20 @@ MODEL_LABELS = {
     "fe_federal_loan_per_student": "Federal loan dollars",
     "fe_weighted_inst_grant": "Institutional grant dollars, weighted",
     "pooled_sector_interaction_inst_grant": "Pooled sector interaction",
+    "syfe_inst_grant_per_student": "Institutional grant dollars, sector-year FE",
+    "syfe_inst_grant_share": "Institutional grant share, sector-year FE",
+    "syfe_pell_per_student": "Pell dollars, sector-year FE",
+    "syfe_pell_share": "Pell share, sector-year FE",
+    "syfe_federal_loan_per_student": "Federal loan dollars, sector-year FE",
+    "syfe_pooled_sector_interaction_inst_grant": "Pooled sector interaction, sector-year FE",
     "fe_net_price_low_income": "Net price, income 0-30000",
+    "syfe_net_price_low_income": "Net price, income 0-30000, sector-year FE",
     "selectivity_inst_grant": "Selective-admissions sample",
     "public_inst_grant": "Public institutions",
     "private_np_inst_grant": "Private nonprofit institutions",
+    "component_horse_race_inst_grant": "COA component model",
+    "public_component_horse_race_inst_grant": "COA component model, public",
+    "private_np_component_horse_race_inst_grant": "COA component model, private nonprofit",
     "sensitivity_min_years_10_inst_grant": "Minimum 10 observed years",
     "sensitivity_balanced_inst_grant": "Balanced 2009-2023 panel",
     "sensitivity_metadata_clean_inst_grant": "No metadata exposure",
@@ -36,6 +46,10 @@ TERM_LABELS = {
     "HEADROOM_MAIN": "COA headroom",
     "HEADROOM_MAIN_SHARE_COA": "Headroom share of COA",
     "HEADROOM_MAIN_X_PRIVATE_NONPROFIT": "COA headroom x private nonprofit",
+    "CHG2AY0": "Tuition and fees",
+    "CHG4AY0": "Books and supplies",
+    "CHG7AY0": "Off-campus room and board",
+    "CHG8AY0": "Other expenses",
 }
 
 MODEL_ORDER = [
@@ -46,10 +60,20 @@ MODEL_ORDER = [
     "fe_federal_loan_per_student",
     "fe_weighted_inst_grant",
     "pooled_sector_interaction_inst_grant",
+    "syfe_inst_grant_per_student",
+    "syfe_inst_grant_share",
+    "syfe_pell_per_student",
+    "syfe_pell_share",
+    "syfe_federal_loan_per_student",
+    "syfe_pooled_sector_interaction_inst_grant",
     "fe_net_price_low_income",
+    "syfe_net_price_low_income",
     "selectivity_inst_grant",
     "public_inst_grant",
     "private_np_inst_grant",
+    "component_horse_race_inst_grant",
+    "public_component_horse_race_inst_grant",
+    "private_np_component_horse_race_inst_grant",
     "sensitivity_min_years_10_inst_grant",
     "sensitivity_balanced_inst_grant",
     "sensitivity_metadata_clean_inst_grant",
@@ -86,7 +110,10 @@ def format_integer(value: object) -> str:
 
 
 def select_estimate_rows(coefficients: pd.DataFrame) -> pd.DataFrame:
-    key_rows = coefficients["is_focal"].astype(bool) | coefficients["term"].eq("HEADROOM_MAIN_X_PRIVATE_NONPROFIT")
+    component_rows = coefficients["model_id"].astype(str).str.contains("component_horse_race") & coefficients["term"].isin(
+        ["CHG2AY0", "CHG4AY0", "CHG7AY0", "CHG8AY0"]
+    )
+    key_rows = coefficients["is_focal"].astype(bool) | coefficients["term"].eq("HEADROOM_MAIN_X_PRIVATE_NONPROFIT") | component_rows
     table = coefficients[key_rows].copy()
     order_map = {model_id: idx for idx, model_id in enumerate(MODEL_ORDER)}
     table["model_order"] = table["model_id"].map(order_map).fillna(len(order_map)).astype(int)

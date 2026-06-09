@@ -17,6 +17,7 @@ DEFAULT_PANEL_DIR = REPO_ROOT / "outputs" / "analysis_panel"
 DEFAULT_OUTPUT_DIR = Path("outputs/policy_exposure")
 DEFAULT_POLICY_SHOCKS_CONFIG = REPO_ROOT / "config" / "policy_shocks.csv"
 DEFAULT_POLICY_EXPOSURE_DESIGNS = REPO_ROOT / "config" / "policy_exposure_designs.csv"
+DEFAULT_POLICY_PRICE_INDEX_CONFIG = REPO_ROOT / "config" / "policy_price_index.csv"
 
 SCOPE_PANELS = {
     "public_private_nonprofit": "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet",
@@ -35,6 +36,15 @@ REQUIRED_DESIGN_COLUMNS = {
     "primary_exposure",
     "notes",
 }
+REQUIRED_PRICE_INDEX_COLUMNS = {
+    "ipeds_sfa_year",
+    "cpi_u_annual_average",
+    "real_base_year",
+    "source_key",
+    "source_url",
+    "verification_status",
+}
+SUPPORTED_DESIGN_IDS = {"yrp2017", "max_pell_delta"}
 
 EXPOSURE_INPUTS = {
     "PELL_EXPOSURE_PRE2017": "PELL_SHARE_OF_TOTAL_GRANT_FTFT",
@@ -53,6 +63,10 @@ POLICY_RENAME = {
     "pell_large_increase": "POLICY_PELL_LARGE_INCREASE",
     "additional_pell_authority_status": "POLICY_ADDITIONAL_PELL_AUTHORITY_STATUS",
     "additional_pell_authority_shock": "POLICY_ADDITIONAL_PELL_AUTHORITY_SHOCK",
+}
+PRICE_RENAME = {
+    "cpi_u_annual_average": "POLICY_CPI_U_ANNUAL_AVERAGE",
+    "real_base_year": "POLICY_REAL_BASE_YEAR",
 }
 
 
@@ -78,23 +92,77 @@ def load_policy_exposure_designs(path: Path = DEFAULT_POLICY_EXPOSURE_DESIGNS) -
     duplicated = designs["design_id"][designs["design_id"].duplicated()].dropna().tolist()
     if duplicated:
         raise ValueError(f"Duplicate design_id values: {duplicated}")
-    unsupported = sorted(set(designs["design_id"]) - {"yrp2017"})
+    unsupported = sorted(set(designs["design_id"]) - SUPPORTED_DESIGN_IDS)
     if unsupported:
         raise ValueError(f"Unsupported policy exposure design_id values: {unsupported}")
     return designs
 
 
-def policy_frame(path: Path) -> pd.DataFrame:
+def base_design(designs: pd.DataFrame) -> pd.Series:
+    matches = designs.loc[designs["design_id"].eq("yrp2017")]
+    if not matches.empty:
+        return matches.iloc[0]
+    return designs.iloc[0]
+
+
+def load_policy_price_index(path: Path = DEFAULT_POLICY_PRICE_INDEX_CONFIG) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Policy price-index config not found: {path}")
+    price = pd.read_csv(path)
+    missing = REQUIRED_PRICE_INDEX_COLUMNS - set(price.columns)
+    if missing:
+        raise ValueError(f"Policy price-index config is missing columns: {', '.join(sorted(missing))}")
+    if price.empty:
+        raise ValueError("Policy price-index config has no rows")
+
+    work = price.rename(columns=PRICE_RENAME).copy()
+    work["ipeds_sfa_year"] = safe_numeric(work["ipeds_sfa_year"]).astype("Int64")
+    work["POLICY_CPI_U_ANNUAL_AVERAGE"] = safe_numeric(work["POLICY_CPI_U_ANNUAL_AVERAGE"])
+    work["POLICY_REAL_BASE_YEAR"] = safe_numeric(work["POLICY_REAL_BASE_YEAR"]).astype("Int64")
+    if work["ipeds_sfa_year"].isna().any():
+        raise ValueError("Policy price-index config has missing or nonnumeric ipeds_sfa_year values")
+    if work["POLICY_CPI_U_ANNUAL_AVERAGE"].isna().any() or work["POLICY_CPI_U_ANNUAL_AVERAGE"].le(0).any():
+        raise ValueError("Policy price-index config has missing or nonpositive CPI values")
+    if work["POLICY_REAL_BASE_YEAR"].nunique(dropna=True) != 1:
+        raise ValueError("Policy price-index config must use one real_base_year")
+    if work["verification_status"].ne("verified").any():
+        bad = work.loc[work["verification_status"].ne("verified"), "ipeds_sfa_year"].astype(int).tolist()
+        raise ValueError(f"Unverified policy price-index rows: {bad}")
+    duplicate_years = work["ipeds_sfa_year"][work["ipeds_sfa_year"].duplicated()].dropna().astype(int).tolist()
+    if duplicate_years:
+        raise ValueError(f"Duplicate policy price-index years: {duplicate_years}")
+    return work
+
+
+def policy_frame(path: Path, price_index_config: Path = DEFAULT_POLICY_PRICE_INDEX_CONFIG) -> pd.DataFrame:
     policy = load_policy_shocks(path)
     audit = audit_policy_shock_frame(policy)
     if audit.issues:
         raise ValueError("Policy shock registry failed audit: " + "; ".join(audit.issues))
+    price = load_policy_price_index(price_index_config)
     keep = ["ipeds_sfa_year", *POLICY_RENAME.keys()]
     work = policy[keep].rename(columns=POLICY_RENAME).copy()
     work["ipeds_sfa_year"] = safe_numeric(work["ipeds_sfa_year"]).astype("Int64")
     work["POLICY_PELL_LARGE_INCREASE"] = work["POLICY_PELL_LARGE_INCREASE"].map(parse_bool)
     for column in ("POLICY_PELL_MAX_AWARD", "POLICY_PELL_MAX_AWARD_DELTA", "POLICY_ADDITIONAL_PELL_AUTHORITY_SHOCK"):
         work[column] = safe_numeric(work[column])
+    work = work.merge(
+        price[["ipeds_sfa_year", "POLICY_CPI_U_ANNUAL_AVERAGE", "POLICY_REAL_BASE_YEAR"]],
+        how="left",
+        on="ipeds_sfa_year",
+    )
+    missing_price_years = work.loc[work["POLICY_CPI_U_ANNUAL_AVERAGE"].isna(), "ipeds_sfa_year"].dropna().astype(int).tolist()
+    if missing_price_years:
+        raise ValueError(f"Policy price-index config missing years: {missing_price_years}")
+    base_year = int(work["POLICY_REAL_BASE_YEAR"].dropna().iloc[0])
+    base_rows = work.loc[work["ipeds_sfa_year"].eq(base_year)]
+    if base_rows.empty:
+        raise ValueError(f"Policy price-index base year not present in policy frame: {base_year}")
+    base_cpi = float(base_rows["POLICY_CPI_U_ANNUAL_AVERAGE"].iloc[0])
+    work = work.sort_values("ipeds_sfa_year").reset_index(drop=True)
+    work["POLICY_PELL_MAX_AWARD_REAL"] = work["POLICY_PELL_MAX_AWARD"] * base_cpi / work["POLICY_CPI_U_ANNUAL_AVERAGE"]
+    work["POLICY_PELL_MAX_AWARD_REAL_DELTA"] = work["POLICY_PELL_MAX_AWARD_REAL"].diff().fillna(0.0)
+    work["POLICY_PELL_MAX_AWARD_REAL_PCT_CHANGE"] = work["POLICY_PELL_MAX_AWARD_REAL"].pct_change().fillna(0.0)
     return work
 
 
@@ -217,12 +285,17 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
     work["POST_PLACEBO_2016"] = work["year"].ge(2016)
     work["PLACEBO_2016_WINDOW"] = work["year"].between(2014, 2016)
     work["PELL_MAX_AWARD_DELTA_100"] = safe_numeric(work["POLICY_PELL_MAX_AWARD_DELTA"]) / 100.0
+    work["PELL_MAX_AWARD_REAL_DELTA_100"] = safe_numeric(work["POLICY_PELL_MAX_AWARD_REAL_DELTA"]) / 100.0
     for exposure_name in EXPOSURE_INPUTS:
         z_col = f"{exposure_name}_Z_SECTOR"
         if z_col not in work.columns:
             continue
         work[f"{exposure_name}_Z_X_POST_YRP_2017"] = safe_numeric(work[z_col]) * work["POST_YRP_2017"].astype(float)
         work[f"{exposure_name}_Z_X_PELL_MAX_AWARD_DELTA_100"] = safe_numeric(work[z_col]) * safe_numeric(work["PELL_MAX_AWARD_DELTA_100"])
+        work[f"{exposure_name}_Z_X_PELL_MAX_AWARD_REAL_DELTA_100"] = safe_numeric(work[z_col]) * safe_numeric(
+            work["PELL_MAX_AWARD_REAL_DELTA_100"]
+        )
+        work[f"{exposure_name}_Z_X_PELL_LARGE_INCREASE"] = safe_numeric(work[z_col]) * work["POLICY_PELL_LARGE_INCREASE"].astype(float)
     if "PELL_EXPOSURE_PRE2017_Z_SECTOR" in work.columns:
         exposure = safe_numeric(work["PELL_EXPOSURE_PRE2017_Z_SECTOR"])
         for year in event_study_years:
@@ -231,6 +304,12 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
         work["PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"] = (
             safe_numeric(work["PELL_EXPOSURE_PRE2016_Z_SECTOR"]) * work["POST_PLACEBO_2016"].astype(float)
         )
+        work["PELL_EXPOSURE_PRE2016_Z_X_PELL_MAX_AWARD_DELTA_100"] = safe_numeric(
+            work["PELL_EXPOSURE_PRE2016_Z_SECTOR"]
+        ) * safe_numeric(work["PELL_MAX_AWARD_DELTA_100"])
+        work["PELL_EXPOSURE_PRE2016_Z_X_PELL_MAX_AWARD_REAL_DELTA_100"] = safe_numeric(
+            work["PELL_EXPOSURE_PRE2016_Z_SECTOR"]
+        ) * safe_numeric(work["PELL_MAX_AWARD_REAL_DELTA_100"])
 
     window = work[work["YRP_2017_WINDOW"]].copy()
     if window.empty:
@@ -256,6 +335,8 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
             placebo_exposure_available_rows=("PLACEBO_EXPOSURE_AVAILABLE", "sum"),
             policy_pell_max_award=("POLICY_PELL_MAX_AWARD", "first"),
             policy_pell_max_award_delta=("POLICY_PELL_MAX_AWARD_DELTA", "first"),
+            policy_pell_max_award_real=("POLICY_PELL_MAX_AWARD_REAL", "first"),
+            policy_pell_max_award_real_delta=("POLICY_PELL_MAX_AWARD_REAL_DELTA", "first"),
             post_yrp_2017=("POST_YRP_2017", "first"),
         )
         .reset_index()
@@ -272,10 +353,11 @@ def build_policy_exposure_panels(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     policy_config: Path = DEFAULT_POLICY_SHOCKS_CONFIG,
     design_config: Path = DEFAULT_POLICY_EXPOSURE_DESIGNS,
+    price_index_config: Path = DEFAULT_POLICY_PRICE_INDEX_CONFIG,
 ) -> dict[str, Path]:
     designs = load_policy_exposure_designs(design_config)
-    design = designs.iloc[0]
-    policy = policy_frame(policy_config)
+    design = base_design(designs)
+    policy = policy_frame(policy_config, price_index_config=price_index_config)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     all_issues: list[str] = []
@@ -333,7 +415,9 @@ def build_policy_exposure_panels(
         "panel_dir": str(panel_dir),
         "policy_config": str(policy_config),
         "design_config": str(design_config),
-        "design_id": str(design["design_id"]),
+        "price_index_config": str(price_index_config),
+        "base_design_id": str(design["design_id"]),
+        "design_ids": designs["design_id"].astype(str).tolist(),
         "scopes_written": int(len(summary_rows)),
         "issue_count": int(len(all_issues)),
         "issues": all_issues,
@@ -354,12 +438,14 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--policy-config", type=Path, default=DEFAULT_POLICY_SHOCKS_CONFIG)
     parser.add_argument("--design-config", type=Path, default=DEFAULT_POLICY_EXPOSURE_DESIGNS)
+    parser.add_argument("--price-index-config", type=Path, default=DEFAULT_POLICY_PRICE_INDEX_CONFIG)
     args = parser.parse_args()
     paths = build_policy_exposure_panels(
         panel_dir=args.panel_dir,
         output_dir=args.output_dir,
         policy_config=args.policy_config,
         design_config=args.design_config,
+        price_index_config=args.price_index_config,
     )
     print(f"Wrote {paths['summary_json'].parent}")
 

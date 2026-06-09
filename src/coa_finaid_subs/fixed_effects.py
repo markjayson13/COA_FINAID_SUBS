@@ -39,6 +39,68 @@ def weighted_group_means(values: pd.DataFrame, groups: pd.Series, weights: pd.Se
     return numerator.div(denominator.replace(0, np.nan), axis=0).fillna(0.0)
 
 
+def fixed_effect_balance(values: pd.DataFrame, fixed_effects: pd.DataFrame, weights: pd.Series | None) -> float:
+    if fixed_effects.empty or values.empty:
+        return 0.0
+    max_balance = 0.0
+    for fe_column in fixed_effects.columns:
+        means = weighted_group_means(values, fixed_effects[fe_column], weights)
+        max_balance = max(max_balance, float(np.nanmax(np.abs(means.to_numpy()))))
+    return max_balance
+
+
+def sparse_absorb_fixed_effects(
+    values: pd.DataFrame,
+    fixed_effects: pd.DataFrame,
+    weights: pd.Series | None,
+    tolerance: float,
+    max_iterations: int,
+) -> tuple[pd.DataFrame, int, float] | None:
+    if weights is not None:
+        return None
+    try:
+        from scipy import sparse
+        from scipy.sparse.linalg import lsmr
+    except ImportError:
+        return None
+
+    nobs = len(values)
+    row_parts: list[np.ndarray] = []
+    col_parts: list[np.ndarray] = []
+    data_parts: list[np.ndarray] = []
+    offset = 0
+    for fe_column in fixed_effects.columns:
+        codes, uniques = pd.factorize(fixed_effects[fe_column], sort=False)
+        valid = codes >= 0
+        row_parts.append(np.arange(nobs, dtype=int)[valid])
+        col_parts.append((codes[valid] + offset).astype(int))
+        data_parts.append(np.ones(int(valid.sum()), dtype=float))
+        offset += len(uniques)
+
+    if offset == 0:
+        return values.astype(float).copy(), 0, 0.0
+
+    rows = np.concatenate(row_parts)
+    cols = np.concatenate(col_parts)
+    data = np.concatenate(data_parts)
+    design = sparse.csr_matrix((data, (rows, cols)), shape=(nobs, offset))
+    weighted_design = design
+
+    residualized = pd.DataFrame(index=values.index)
+    max_lsmr_iterations = 0
+    lsmr_tolerance = min(tolerance, 1e-12)
+    lsmr_max_iterations = max(max_iterations, 10_000)
+    for column in values.columns:
+        target = values[column].to_numpy(dtype=float)
+        solution = lsmr(weighted_design, target, atol=lsmr_tolerance, btol=lsmr_tolerance, maxiter=lsmr_max_iterations)
+        fitted = design @ solution[0]
+        residualized[column] = target - fitted
+        max_lsmr_iterations = max(max_lsmr_iterations, int(solution[2]))
+
+    balance = fixed_effect_balance(residualized, fixed_effects, weights)
+    return residualized, min(max_lsmr_iterations, max_iterations), balance
+
+
 def absorb_fixed_effects(
     values: pd.DataFrame,
     fixed_effects: pd.DataFrame,
@@ -49,6 +111,16 @@ def absorb_fixed_effects(
     residualized = values.astype(float).copy()
     if fixed_effects.empty:
         return residualized, 0, 0.0
+
+    sparse_result = sparse_absorb_fixed_effects(
+        residualized,
+        fixed_effects,
+        weights=weights,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
+    )
+    if sparse_result is not None:
+        return sparse_result
 
     last_change = float("inf")
     for iteration in range(1, max_iterations + 1):
@@ -103,6 +175,8 @@ def estimation_variables(spec: ModelSpec) -> list[str]:
 def required_columns(spec: ModelSpec) -> list[str]:
     columns = estimation_variables(spec)
     columns.extend(spec.fixed_effects)
+    if "SECTOR_YEAR" in spec.fixed_effects:
+        columns.append("year")
     if spec.cluster_level:
         columns.append(spec.cluster_level)
     if spec.weight_variable:

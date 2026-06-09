@@ -1,8 +1,8 @@
 # Policy exposure design
 
-This note documents the first policy-exposure design. It is separate from the baseline fixed-effects estimates.
+This note documents the policy-exposure designs. They are separate from the baseline fixed-effects estimates.
 
-## Design
+## Design 1: year-round Pell restoration
 
 The first design uses the 2017-2018 restoration of year-round Pell Grants. The national policy change is recorded in `config/policy_shocks.csv`. The institution-level exposure is measured before the change.
 
@@ -74,10 +74,41 @@ Outcome_it = institution fixed effects + year fixed effects
 
 The coefficient does not say that the policy changed one institution and not another. It compares institutions with different pre-period Pell exposure before and after the national policy change.
 
+## Design 2: annual maximum Pell changes
+
+The second design uses annual changes in the maximum Pell Grant award. The maximum award is set nationally, so the design again requires pre-period institution exposure. The main estimating variable is:
+
+```text
+PELL_EXPOSURE_PRE2017_Z_X_PELL_MAX_AWARD_REAL_DELTA_100
+```
+
+This is the institution's 2014-2016 Pell-exposure z-score, standardized within pre-period sector, multiplied by the annual change in the maximum Pell award measured in hundreds of 2023 dollars.
+
+The panel also writes two checks:
+
+```text
+PELL_EXPOSURE_PRE2017_Z_X_PELL_MAX_AWARD_DELTA_100
+PELL_EXPOSURE_PRE2017_Z_X_PELL_LARGE_INCREASE
+```
+
+The first uses nominal maximum Pell changes. The second uses the large-increase flag in the Pell schedule registry. The real-dollar version is preferred because nominal increases can mix policy generosity with inflation.
+
+The pre-period placebo variables are:
+
+```text
+PELL_EXPOSURE_PRE2016_Z_X_PELL_MAX_AWARD_REAL_DELTA_100
+PELL_EXPOSURE_PRE2016_Z_X_PELL_MAX_AWARD_DELTA_100
+```
+
+These use 2014-2015 Pell exposure and 2014-2016 rows. A sharp placebo coefficient means high- and low-exposure institutions were already moving differently before the later post-2017 period.
+
+The real-dollar conversion uses `config/policy_price_index.csv`, which records CPI-U annual averages and expresses Pell awards in 2023 dollars.
+
 ## Files
 
 - `config/policy_exposure_designs.csv` defines the event window and pre-period rule.
 - `config/policy_exposure_model_specifications.csv` defines the first policy-exposure models.
+- `config/policy_price_index.csv` defines the CPI-U annual averages used for real maximum Pell awards.
 - `scripts/build_policy_exposure_panels.py` writes the exposure panels and audit files.
 - `scripts/build_policy_event_study_table.py` writes the event-study coefficient table after policy fixed-effects models are run.
 - `src/coa_finaid_subs/policy_exposures.py` contains the exposure construction.

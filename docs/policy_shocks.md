@@ -4,6 +4,8 @@
 
 The file has one row for each award year from 2009-2010 through 2023-2024. `ipeds_sfa_year` equals the first calendar year in the award year, matching the year convention used by the prepared IPEDS SFA panel.
 
+`config/policy_price_index.csv` records CPI-U annual averages used to express maximum Pell awards in 2023 dollars. The policy-exposure builder merges that file with the Pell schedule before writing real maximum-award fields.
+
 ## Fields
 
 - `pell_max_award`: maximum Pell Grant award listed in the Federal Student Aid payment schedule.
@@ -13,6 +15,12 @@ The file has one row for each award year from 2009-2010 through 2023-2024. `iped
 - `additional_pell_authority_shock`: `-1` for the 2011-2012 removal event, `1` for the 2017-2018 restoration event, and `0` otherwise.
 - `source_key`, `source_date`, `source_title`, and `source_url`: row-level Federal Student Aid source information.
 - `additional_pell_source_key` and `additional_pell_source_url`: event-specific sources for the 2011-2012 removal and 2017-2018 restoration.
+
+The price-index file records:
+
+- `cpi_u_annual_average`: CPI-U all items annual average.
+- `real_base_year`: constant-dollar base year, currently 2023.
+- source metadata for the BLS CPI-U series.
 
 ## Current registry
 
@@ -41,6 +49,6 @@ The audit fails if award years are not contiguous, IPEDS SFA years do not match 
 
 ## Paper use
 
-The registry can support timing checks and later exposure designs. It should not be treated as an institution-level policy treatment by itself because the Pell schedule is national.
+The registry can support timing checks, maximum-award intensity checks, and exposure designs. It should not be treated as an institution-level policy treatment by itself because the Pell schedule is national.
 
-Any policy-exposure design should interact a national shock with a pre-period institution measure such as Pell intensity, loan intensity, or institutional-grant intensity. Those exposure measures should be built and audited separately before the paper uses them.
+Any policy-exposure design should interact a national shock or maximum-award change with a pre-period institution measure such as Pell intensity, loan intensity, or institutional-grant intensity. Those exposure measures should be built and audited separately before the paper uses them.

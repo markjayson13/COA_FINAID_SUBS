@@ -19,9 +19,10 @@ from coa_finaid_subs.fixed_effects_crosscheck import run_fixed_effects_crosschec
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.model_samples import build_model_samples
-from coa_finaid_subs.policy_exposures import build_policy_exposure_panels
+from coa_finaid_subs.policy_exposures import build_policy_exposure_panels, load_policy_price_index
 from coa_finaid_subs.policy_shocks import audit_policy_shock_frame, audit_policy_shocks, load_policy_shocks
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
+from coa_finaid_subs.reviewer_tables import ModelBlock, build_reviewer_tables
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1120,6 +1121,46 @@ def test_model_sample_builder_materializes_private_nonprofit_interaction(tmp_pat
     assert sample["HEADROOM_MAIN_X_PRIVATE_NONPROFIT"].tolist() == [0.0, 12_000.0]
 
 
+def test_model_sample_builder_materializes_sector_year_fixed_effect(tmp_path: Path) -> None:
+    panel_dir = tmp_path / "analysis_panel"
+    panel_path = panel_dir / "public_private_nonprofit" / "analysis.parquet"
+    config_path = tmp_path / "model_specifications.csv"
+    output_dir = tmp_path / "model_samples"
+    rows = [
+        {
+            "year": 2009,
+            "UNITID": 1,
+            "SECTOR": 1,
+            "IGRNT_PER_FTFT_COHORT": 100.0,
+            "HEADROOM_MAIN": 10_000.0,
+        },
+        {
+            "year": 2009,
+            "UNITID": 2,
+            "SECTOR": 2,
+            "IGRNT_PER_FTFT_COHORT": 200.0,
+            "HEADROOM_MAIN": 12_000.0,
+        },
+    ]
+    write_parquet(panel_path, rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "sector_year_model,sector_year_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,,,UNITID;SECTOR_YEAR,UNITID,sector_year_check,Sector-year sample.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    paths = build_model_samples(panel_dir=panel_dir, output_dir=output_dir, config=config_path)
+
+    sample = pd.read_parquet(paths["sample_dir"] / "sector_year_model.parquet")
+    assert "SECTOR_YEAR" in sample.columns
+    assert sample["SECTOR_YEAR"].tolist() == ["1_2009", "2_2009"]
+
+
 def test_model_sample_builder_applies_metadata_clean_filter(tmp_path: Path) -> None:
     panel_dir = tmp_path / "analysis_panel"
     panel_path = panel_dir / "public_private_nonprofit" / "analysis.parquet"
@@ -1259,6 +1300,58 @@ def test_fixed_effects_crosscheck_matches_linearmodels_on_focal_coefficient(tmp_
     assert comparison["estimate_abs_diff"].iloc[0] <= 1e-6
 
 
+def test_fixed_effects_crosscheck_matches_linearmodels_with_sector_year_effects(tmp_path: Path) -> None:
+    pytest.importorskip("linearmodels")
+    sample_dir = tmp_path / "model_samples" / "samples"
+    fixed_effects_dir = tmp_path / "fixed_effects"
+    crosscheck_dir = tmp_path / "fixed_effects_crosscheck"
+    config_path = tmp_path / "model_specifications.csv"
+    rows = []
+    unit_effects = {unitid: unitid * 2.0 for unitid in range(1, 9)}
+    sector_year_effects = {(sector, year): sector * 5.0 + (year - 2010) * 1.5 for sector in (1, 2) for year in range(2010, 2015)}
+    for unitid in unit_effects:
+        sector = 1 if unitid <= 4 else 2
+        for year in range(2010, 2015):
+            headroom = float((unitid - 4.5) * (year - 2011) + sector * 0.2)
+            outcome = 1.25 * headroom + unit_effects[unitid] + sector_year_effects[(sector, year)]
+            rows.append(
+                {
+                    "UNITID": unitid,
+                    "year": year,
+                    "SECTOR": sector,
+                    "SECTOR_YEAR": f"{sector}_{year}",
+                    "HEADROOM_MAIN": headroom,
+                    "IGRNT_PER_FTFT_COHORT": outcome,
+                    "model_id": "sector_year_model",
+                }
+            )
+    write_parquet(sample_dir / "sector_year_model.parquet", rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "sector_year_model,sector_year_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,,,UNITID;SECTOR_YEAR,UNITID,sector_year_check,Sector-year coefficient check.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_fixed_effects(sample_dir=sample_dir, output_dir=fixed_effects_dir, config=config_path)
+    paths = run_fixed_effects_crosscheck(
+        sample_dir=sample_dir,
+        output_dir=crosscheck_dir,
+        config=config_path,
+        fixed_effects_dir=fixed_effects_dir,
+        model_ids=["sector_year_model"],
+    )
+    comparison = pd.read_csv(paths["comparison"])
+
+    assert len(comparison) == 1
+    assert comparison["passes_crosscheck"].iloc[0]
+    assert comparison["estimate_abs_diff"].iloc[0] <= 1e-6
+
+
 def test_fixed_effects_estimator_recovers_known_sector_interaction(tmp_path: Path) -> None:
     sample_dir = tmp_path / "model_samples" / "samples"
     output_dir = tmp_path / "fixed_effects"
@@ -1362,6 +1455,111 @@ def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
     assert paths["paper_docx"].stat().st_size > 0
 
 
+def test_reviewer_table_builder_writes_model_cards_and_attrition(tmp_path: Path) -> None:
+    config_path = tmp_path / "model_specifications.csv"
+    model_plan_dir = tmp_path / "model_plan"
+    sample_dir = tmp_path / "model_samples"
+    fixed_dir = tmp_path / "fixed_effects"
+    output_dir = tmp_path / "reviewer_tables"
+    model_plan_dir.mkdir()
+    sample_dir.mkdir()
+    fixed_dir.mkdir()
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes,sample_filter,filter_notes",
+                "main_model,baseline_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,OPEN_ADMISSIONS_FLAG,,UNITID;year,UNITID,main,Main check,,",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame(
+        [
+            {
+                "model_id": "main_model",
+                "total_rows": 100,
+                "complete_case_rows": 80,
+            }
+        ]
+    ).to_csv(model_plan_dir / "model_specification_coverage.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "main_model",
+                "source_rows": 100,
+                "sample_rows": 80,
+                "sample_institutions": 20,
+                "singleton_institutions": 1,
+                "institutions_without_focal_within_variation": 2,
+            }
+        ]
+    ).to_csv(sample_dir / "model_sample_manifest.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "main_model",
+                "varname": "HEADROOM_MAIN",
+                "role": "focal_variable",
+                "present": True,
+                "source_rows": 100,
+                "missing_rows": 15,
+                "missing_share": 0.15,
+            }
+        ]
+    ).to_csv(sample_dir / "model_sample_variable_missingness.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "main_model",
+                "estimation_rows": 80,
+                "institutions": 20,
+                "clusters": 20,
+                "singleton_clusters": 1,
+                "within_r_squared": 0.1,
+                "rank_deficient": False,
+                "absorbed_iterations": 4,
+                "absorbed_last_change": 1e-12,
+            }
+        ]
+    ).to_csv(fixed_dir / "fixed_effects_model_diagnostics.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "main_model",
+                "term": "HEADROOM_MAIN",
+                "estimate": 0.1,
+                "std_error": 0.02,
+                "t_stat": 5.0,
+                "p_value_normal": 0.001,
+                "nobs": 80,
+            }
+        ]
+    ).to_csv(fixed_dir / "fixed_effects_focal_coefficients.csv", index=False)
+
+    paths = build_reviewer_tables(
+        output_dir=output_dir,
+        blocks=(
+            ModelBlock(
+                block="baseline",
+                config=config_path,
+                model_plan_dir=model_plan_dir,
+                sample_dir=sample_dir,
+                fixed_effects_dir=fixed_dir,
+            ),
+        ),
+    )
+
+    cards = pd.read_csv(paths["model_cards"])
+    attrition = pd.read_csv(paths["sample_attrition"])
+    glossary = pd.read_csv(paths["metadata_glossary"])
+    assert cards.loc[0, "focal_estimate"] == pytest.approx(0.1)
+    assert "HEADROOM_MAIN (15)" in cards.loc[0, "main_attrition_source"]
+    assert attrition.loc[0, "rows_dropped"] == pytest.approx(20)
+    assert attrition.loc[0, "retained_share"] == pytest.approx(0.8)
+    assert "FLAG_IPEDS_ANY_METADATA_EXPOSURE" in set(glossary["field_family"])
+
+
 def test_policy_shock_config_is_verified_and_contiguous(tmp_path: Path) -> None:
     df = load_policy_shocks()
     audit = audit_policy_shock_frame(df)
@@ -1408,6 +1606,15 @@ def test_policy_shock_audit_fails_unofficial_source_url() -> None:
     audit = audit_policy_shock_frame(df)
 
     assert any("non-FSA source URLs" in issue for issue in audit.issues)
+
+
+def test_policy_price_index_config_is_verified() -> None:
+    price = load_policy_price_index()
+
+    assert set(range(2009, 2024)) <= set(price["ipeds_sfa_year"].astype(int))
+    assert price["POLICY_CPI_U_ANNUAL_AVERAGE"].gt(0).all()
+    assert price["POLICY_REAL_BASE_YEAR"].nunique() == 1
+    assert int(price["POLICY_REAL_BASE_YEAR"].iloc[0]) == 2023
 
 
 def test_policy_exposure_builder_writes_exposure_panels(tmp_path: Path) -> None:
@@ -1473,7 +1680,12 @@ def test_policy_exposure_builder_writes_exposure_panels(tmp_path: Path) -> None:
     panel = pd.read_parquet(paths["public_private_nonprofit_panel"])
     assert "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
     assert "PELL_PER_FTFT_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
+    assert "POLICY_PELL_MAX_AWARD_REAL" in panel.columns
+    assert "POLICY_PELL_MAX_AWARD_REAL_DELTA" in panel.columns
+    assert "PELL_EXPOSURE_PRE2017_Z_X_PELL_MAX_AWARD_REAL_DELTA_100" in panel.columns
+    assert "PELL_EXPOSURE_PRE2017_Z_X_PELL_LARGE_INCREASE" in panel.columns
     assert "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016" in panel.columns
+    assert "PELL_EXPOSURE_PRE2016_Z_X_PELL_MAX_AWARD_REAL_DELTA_100" in panel.columns
     assert "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014" in panel.columns
     assert "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2018" in panel.columns
     assert "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2016" not in panel.columns
@@ -1481,6 +1693,8 @@ def test_policy_exposure_builder_writes_exposure_panels(tmp_path: Path) -> None:
     assert panel["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna().sum() == len(panel)
     assert panel.loc[panel["year"].eq(2016), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].eq(0).all()
     assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].abs().sum() > 0
+    assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_PELL_MAX_AWARD_REAL_DELTA_100"].abs().sum() > 0
+    assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_PELL_LARGE_INCREASE"].abs().sum() > 0
     assert panel.loc[panel["year"].eq(2014), "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014"].abs().sum() > 0
     assert panel.loc[panel["year"].eq(2015), "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014"].eq(0).all()
     assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2018"].abs().sum() > 0

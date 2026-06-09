@@ -1,6 +1,6 @@
 # Estimator validation
 
-The main estimator is local and transparent: it residualizes the configured variables by institution and year, solves the residualized least-squares problem, and computes clustered standard errors by `UNITID`.
+The main estimator is local and transparent: it residualizes the configured variables by the fixed effects named in the model config, solves the residualized least-squares problem, and computes clustered standard errors by `UNITID`.
 
 That transparency is useful, but it is not enough for paper tables. The headline estimates should also be checked against a maintained panel-estimation package before they are cited in the manuscript.
 
@@ -19,17 +19,15 @@ PYTHONPATH=src python scripts/crosscheck_fixed_effects.py \
   --sample-dir outputs/model_samples/samples \
   --fixed-effects-dir outputs/fixed_effects \
   --output-dir outputs/fixed_effects_crosscheck \
-  --config config/model_specifications.csv \
-  --model-id fe_inst_grant_per_student \
-  --model-id public_inst_grant \
-  --model-id private_np_inst_grant
+  --config config/model_specifications.csv
 ```
 
 By default, the script checks the focal coefficient from each selected model. Add `--all-terms` to compare controls too. The control-term check is useful for numerical audits, but the manuscript gate is the focal coefficient used as a finding.
 
-The script fits the same materialized model samples with `linearmodels.PanelOLS`, using entity and time effects when the model specifies `UNITID;year`. It uses the same clustered-SE small-sample convention as the local estimator. It writes:
+The script fits the same materialized model samples with `linearmodels.PanelOLS`. It uses entity and time effects when the model specifies `UNITID;year`, and entity plus other effects when the model specifies `UNITID;SECTOR_YEAR`. It uses the same clustered-SE small-sample convention as the local estimator. It writes:
 
 - `outputs/fixed_effects_crosscheck/fixed_effects_linearmodels_comparison.csv`
+- `outputs/fixed_effects_crosscheck/fixed_effects_linearmodels_skipped.csv`
 - `outputs/fixed_effects_crosscheck/fixed_effects_linearmodels_summary.json`
 
 ## Rule for manuscript use
@@ -40,10 +38,8 @@ The check does not change the research design. It is a numerical validation step
 
 ## Current result
 
-The current local cross-check passes for:
+The current local cross-check covers all 25 configured baseline, sector-year, component, and sensitivity focal coefficients. No model was skipped, and no focal term failed the configured tolerance.
 
-- `fe_inst_grant_per_student`
-- `public_inst_grant`
-- `private_np_inst_grant`
+The maximum absolute coefficient difference is `3.69e-12`; the maximum absolute standard-error difference is `1.85e-05`.
 
-The three focal coefficients match within the configured tolerances. The maximum absolute coefficient difference is `1.39e-16`; the maximum absolute standard-error difference is `1.49e-05`.
+I also ran `--all-terms` as a diagnostic. That comparison is stricter than the manuscript gate and can flag control-term standard-error differences. The paper gate remains the focal coefficient for each model used as evidence.

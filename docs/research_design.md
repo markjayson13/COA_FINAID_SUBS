@@ -110,6 +110,10 @@ Outcome_it = institution fixed effects + year fixed effects + beta Headroom_it +
 
 Run public and private nonprofit models separately. Also run a pooled model with sector interactions for formal cross-sector tests.
 
+The pooled models have two layers. The first uses common year fixed effects and a headroom-by-private-nonprofit interaction. The second absorbs sector-by-year fixed effects. The sector-year version is the preferred pooled diagnostic because it allows public and private nonprofit institutions to follow different calendar-year shocks.
+
+The baseline stage also includes a component model that enters tuition and fees, books, off-campus room and board, and other expenses side by side. That model is a mechanism check. It asks whether the aggregate headroom association is carried by allowance-like components or by charge-like components.
+
 This stage supports an institution-level incidence claim. It does not support a student-level packaging claim.
 
 The first implementation is now in `scripts/run_fixed_effects.py`, with the current local run summarized in `docs/fixed_effects_baseline.md`. `scripts/build_estimate_tables.py` exports the current fixed-effects table to CSV, LaTeX, and Word.
@@ -124,9 +128,11 @@ Outcome_it = institution fixed effects + year fixed effects + beta Exposure_i x 
 
 The national Pell-shock registry is now recorded in `config/policy_shocks.csv` and audited by `scripts/audit_policy_shocks.py`. The registry records maximum Pell award changes and additional Pell authority events from verified Federal Student Aid sources.
 
-The registry is not an institution-level treatment by itself because the Pell schedule is national. Exposure must be measured before the shock period. The first policy-exposure design uses the 2017 restoration of year-round Pell and measures Pell exposure from 2014-2016. It is documented in `docs/policy_exposure_design.md`.
+The registry is not an institution-level treatment by itself because the Pell schedule is national. Exposure must be measured before the shock period. The first policy-exposure design uses the 2017 restoration of year-round Pell and measures Pell exposure from 2014-2016. The second policy-exposure design uses annual changes in the maximum Pell Grant award interacted with the same pre-period Pell exposure. It is documented in `docs/policy_exposure_design.md`.
 
 The policy design now includes event-study interactions for 2014-2023, omitting 2016. The 2014 and 2015 coefficients are lead checks. The 2017-2023 coefficients show post-restoration dynamics. These estimates remain diagnostic until the lead and placebo checks are clean for the outcome.
+
+The maximum-Pell design has a real-dollar version and nominal checks. The real-dollar version is the preferred repeated-shock design because nominal award increases partly reflect inflation. This design still needs placebo checks before any causal wording.
 
 ### Stage 4: mechanism and falsification checks
 
@@ -144,6 +150,8 @@ Minimum set:
 
 - public-only and private nonprofit-only estimates
 - pooled sector interaction tests
+- pooled sector-by-year fixed-effect checks
+- COA component horse-race checks
 - FTFT cohort-weighted estimates
 - minimum-years sample restrictions
 - balanced-window subset
@@ -174,4 +182,5 @@ Not allowed from IPEDS alone:
 
 1. Tighten the institutional-grant policy design before treating that estimate as causal, because the 2016 placebo check is not clean.
 2. Keep policy-exposure estimates separate from the baseline fixed-effects estimates.
-3. Add manuscript exhibit scripts only after the paper table order is fixed.
+3. Use the reviewer model-card and sample-attrition tables when drafting the appendix.
+4. Add manuscript exhibit scripts only after the paper table order is fixed.

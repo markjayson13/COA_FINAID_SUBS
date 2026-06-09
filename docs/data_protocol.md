@@ -64,6 +64,7 @@ Before writing the analysis panel, the script checks:
 - complete-case model samples with singleton and within-variation diagnostics
 - aid-zero consistency checks across counts, percentages, averages, and totals
 - all-variable distribution and extreme-value audit before any winsorization decision
+- reviewer-facing model cards and sample-attrition rows after estimation
 - raw net-price values retained
 - negative net-price values flagged and copied to cleaned fields with negatives set missing
 - raw IPEDS imputation, revision, collection-status, and parent-child fields retained where available
@@ -84,9 +85,13 @@ The metadata fields are kept in two forms. The raw `IMP_*`, `LOCK_*`, `REV_*`, `
 
 The entry and exit tables use first and last observed years within this research window. They do not, by themselves, prove that an institution opened or closed. An institution first observed after 2009 may be a true entrant, a campus that became eligible for this sample, or a record whose reporting status changed. An institution last observed before 2023 may have closed, merged, changed sector, left Title IV, or stopped meeting the four-year sample rule.
 
+The policy-exposure layer keeps national policy registries separate from the analysis panel. `config/policy_shocks.csv` records Pell schedule changes. `config/policy_price_index.csv` records CPI-U annual averages for real maximum Pell calculations. The exposure builder merges those files only when writing policy-exposure panels.
+
 Outlier handling is audit-first. The repository now writes all-variable distribution profiles and review-candidate tables, but it does not winsorize the panel by default. Any cap, trim, or transformation rule should be added later as a named sensitivity with a variable-level reason.
 
 The descriptive-statistics table uses limited winsorization for display only. The cap rules live in `config/descstat_variables.csv`, and the table builder writes raw and capped means side by side. This does not alter the analysis parquet and does not make winsorization part of the baseline estimating sample.
+
+After estimation, `scripts/build_reviewer_tables.py` writes model cards, sample-attrition rows, and a metadata glossary. These tables do not create new estimates. They put the model formula, fixed effects, controls, complete-case loss, clusters, diagnostics, and metadata flag definitions in one auditable place.
 
 ## Generated files
 

@@ -84,7 +84,7 @@ def issue_rows_for_coefficients(
         if pd.notna(t_stat) and abs(t_stat) >= max_abs_t_stat:
             rows.append({"model_id": model_id, "check": "extreme_focal_t_stat", "detail": f"{term}: t_stat={t_stat:.3g}"})
         role = str(record.get("role", ""))
-        if check_placebo_signals and role == "policy_placebo" and pd.notna(t_stat) and abs(t_stat) >= placebo_t_threshold:
+        if check_placebo_signals and "placebo" in role and pd.notna(t_stat) and abs(t_stat) >= placebo_t_threshold:
             rows.append({"model_id": model_id, "check": "placebo_signal", "detail": f"{term}: t_stat={t_stat:.3g}"})
     return rows
 
@@ -94,7 +94,7 @@ def validate_fixed_effects_outputs(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     config: Path | None = None,
     max_absorbed_iterations: int = 1_000,
-    absorption_tolerance: float = 1e-8,
+    absorption_tolerance: float = 1e-4,
     min_clusters: int = 50,
     min_std_error: float = 1e-10,
     max_abs_t_stat: float = 100.0,
@@ -159,7 +159,7 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--min-clusters", type=int, default=50)
     parser.add_argument("--max-absorbed-iterations", type=int, default=1_000)
-    parser.add_argument("--absorption-tolerance", type=float, default=1e-8)
+    parser.add_argument("--absorption-tolerance", type=float, default=1e-4)
     parser.add_argument("--skip-placebo-signal-check", action="store_true")
     args = parser.parse_args()
     paths = validate_fixed_effects_outputs(

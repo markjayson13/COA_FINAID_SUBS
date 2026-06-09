@@ -14,6 +14,7 @@ DEFAULT_MODEL_CONFIG = REPO_ROOT / "config" / "model_specifications.csv"
 DEFAULT_PANEL_DIR = REPO_ROOT / "outputs" / "analysis_panel"
 
 MODEL_DERIVED_TERM_SOURCES: dict[str, tuple[str, ...]] = {
+    "SECTOR_YEAR": ("SECTOR", "year"),
     "SECTOR_PRIVATE_NONPROFIT": ("SECTOR",),
     "HEADROOM_MAIN_X_PRIVATE_NONPROFIT": ("HEADROOM_MAIN", "SECTOR"),
     "HEADROOM_MAIN_SHARE_COA_X_PRIVATE_NONPROFIT": ("HEADROOM_MAIN_SHARE_COA", "SECTOR"),
@@ -114,7 +115,15 @@ def model_terms_for_spec(spec: ModelSpec) -> list[str]:
 def filter_source_variables(spec: ModelSpec) -> list[str]:
     if spec.sample_filter == "metadata_clean":
         return ["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]
-    if spec.sample_filter in {"min_years_10", "balanced_full_window", "no_suspect_aid_zero", "yrp_2017_window"}:
+    if spec.sample_filter in {
+        "min_years_10",
+        "balanced_full_window",
+        "no_suspect_aid_zero",
+        "yrp_2017_window",
+        "max_pell_window",
+        "max_pell_window_no_2020_2021",
+        "max_pell_placebo_window",
+    }:
         return ["UNITID", "year"]
     if spec.sample_filter == "yrp_2017_window_pre3":
         return ["UNITID", "year", "PELL_EXPOSURE_PRE2017_YEARS_OBSERVED"]
@@ -141,6 +150,10 @@ def variables_for_spec(spec: ModelSpec) -> list[str]:
 def add_model_derived_terms(frame: pd.DataFrame, terms: list[str]) -> pd.DataFrame:
     work = frame.copy()
     required = set(terms)
+    if "SECTOR_YEAR" in required and {"SECTOR", "year"} <= set(work.columns):
+        sector = pd.to_numeric(work["SECTOR"], errors="coerce").astype("Int64").astype(str)
+        year = pd.to_numeric(work["year"], errors="coerce").astype("Int64").astype(str)
+        work["SECTOR_YEAR"] = sector + "_" + year
     if "SECTOR_PRIVATE_NONPROFIT" in required and "SECTOR" in work.columns:
         work["SECTOR_PRIVATE_NONPROFIT"] = pd.to_numeric(work["SECTOR"], errors="coerce").eq(2).astype(float)
     interaction_terms = {
@@ -207,6 +220,18 @@ def sample_filter_mask(frame: pd.DataFrame, spec: ModelSpec, scope_dir: Path) ->
     if spec.sample_filter == "yrp_2017_window":
         years = pd.to_numeric(frame["year"], errors="coerce")
         return years.between(2014, 2023)
+
+    if spec.sample_filter == "max_pell_window":
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        return years.between(2014, 2023)
+
+    if spec.sample_filter == "max_pell_window_no_2020_2021":
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        return years.between(2014, 2023) & ~years.isin([2020, 2021])
+
+    if spec.sample_filter == "max_pell_placebo_window":
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        return years.between(2014, 2016)
 
     if spec.sample_filter == "yrp_2017_window_pre3":
         if "PELL_EXPOSURE_PRE2017_YEARS_OBSERVED" not in frame.columns:

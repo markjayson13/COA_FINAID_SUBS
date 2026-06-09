@@ -1,2 +1,3 @@
 design_id,event_year,pre_start,pre_end,post_start,post_end,min_pre_years,primary_exposure,notes
 yrp2017,2017,2014,2016,2017,2023,2,PELL_EXPOSURE_PRE2017_Z_SECTOR,Year-round Pell restoration design. Exposure is pre-2017 Pell intensity measured before the policy change.
+max_pell_delta,2017,2014,2016,2014,2023,2,PELL_EXPOSURE_PRE2017_Z_SECTOR,Repeated maximum Pell design. Exposure is pre-2017 Pell intensity interacted with annual changes in the maximum Pell award.

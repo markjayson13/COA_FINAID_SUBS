@@ -18,12 +18,12 @@ The script writes:
 - one complete-case parquet for each model under `outputs/model_samples/samples/`
 - `outputs/model_samples/model_sample_summary.json`
 
-The latest local run wrote all 15 planned model samples and found no missing model variables.
+The latest local run wrote all 25 planned baseline, sector-year, component, and sensitivity model samples and found no missing model variables.
 
 The baseline estimation validator also passed after the refreshed model samples were estimated:
 
 ```text
-15 models observed
+25 models observed
 0 validation issues
 ```
 
@@ -38,10 +38,20 @@ The baseline estimation validator also passed after the refreshed model samples 
 | `fe_federal_loan_per_student` | 24,247 | 2,082 | 44 | 44 |
 | `fe_weighted_inst_grant` | 24,247 | 2,082 | 44 | 44 |
 | `pooled_sector_interaction_inst_grant` | 24,247 | 2,082 | 44 | 44 |
+| `syfe_inst_grant_per_student` | 24,247 | 2,082 | 44 | 44 |
+| `syfe_inst_grant_share` | 24,125 | 2,075 | 47 | 16 |
+| `syfe_pell_per_student` | 24,247 | 2,082 | 44 | 44 |
+| `syfe_pell_share` | 24,125 | 2,075 | 47 | 16 |
+| `syfe_federal_loan_per_student` | 24,247 | 2,082 | 44 | 44 |
+| `syfe_pooled_sector_interaction_inst_grant` | 24,247 | 2,082 | 44 | 44 |
 | `fe_net_price_low_income` | 21,296 | 2,025 | 48 | 43 |
+| `syfe_net_price_low_income` | 21,296 | 2,025 | 48 | 43 |
 | `selectivity_inst_grant` | 15,201 | 1,459 | 51 | 18 |
 | `public_inst_grant` | 8,626 | 713 | 13 | 13 |
 | `private_np_inst_grant` | 15,621 | 1,371 | 31 | 33 |
+| `component_horse_race_inst_grant` | 24,247 | 2,082 | 44 | 96 |
+| `public_component_horse_race_inst_grant` | 8,626 | 713 | 13 | 21 |
+| `private_np_component_horse_race_inst_grant` | 15,621 | 1,371 | 31 | 76 |
 | `sensitivity_min_years_10_inst_grant` | 22,654 | 1,751 | 9 | 14 |
 | `sensitivity_balanced_inst_grant` | 20,996 | 1,590 | 7 | 11 |
 | `sensitivity_metadata_clean_inst_grant` | 20,311 | 2,041 | 54 | 45 |
@@ -73,3 +83,11 @@ The model samples feed `scripts/run_fixed_effects.py`. The estimator reports:
 - clustering level
 
 The complete-case samples are not committed. They are generated from the committed model specification file and the local analysis panels.
+
+The reviewer-facing attrition table is now generated separately:
+
+```bash
+PYTHONPATH=src python scripts/build_reviewer_tables.py
+```
+
+It writes `outputs/reviewer_tables/model_sample_attrition.csv`, which gives one row per baseline and policy model with source rows, complete-case rows, rows dropped, retained share, clusters, and the main missingness sources.

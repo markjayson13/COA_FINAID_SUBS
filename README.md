@@ -29,6 +29,26 @@ Private for-profit institutions are not part of the baseline sample. They can be
 
 The script does not modify the source panel. It writes a derived analysis parquet and audit tables under `outputs/`, which are ignored by Git.
 
+## Claim boundary
+
+This repository studies institution-level published cost-of-attendance margins and FTFT aid outcomes. The baseline fixed-effects estimates are within-institution associations. They are not student-level packaging estimates and they are not causal policy estimates.
+
+Use this wording:
+
+- cost-of-attendance headroom is a published institution-year non-tuition budget margin
+- the main aid outcomes use full-time, first-time Student Financial Aid fields
+- public and private nonprofit estimates are the headline sector results
+- pooled models are checks unless a sector-by-year fixed-effect specification supports the same reading
+- the Pell policy-exposure layer is diagnostic unless placebo and event-study checks are clean for the outcome
+
+Do not use this wording:
+
+- unused aid capacity
+- student-level grant substitution
+- proof that institutions inflated COA
+- causal institutional-grant response to year-round Pell
+- a full-postsecondary-sector estimate
+
 ## What is here
 
 - `config/analysis_variables.csv` lists the raw IPEDS variables selected for the research extract.
@@ -37,6 +57,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `config/model_specifications.csv` lists the first model specifications used by the sample builder and fixed-effects estimator.
 - `config/policy_exposure_designs.csv` defines the first pre-period exposure design for the 2017 year-round Pell restoration.
 - `config/policy_exposure_model_specifications.csv` lists the first policy-exposure model specifications.
+- `config/policy_price_index.csv` records the CPI-U annual averages used to express maximum Pell awards in 2023 dollars.
 - `config/policy_shocks.csv` records verified Pell Grant schedule changes and year-round Pell authority events.
 - `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
@@ -53,8 +74,10 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
 - `scripts/validate_fixed_effects_outputs.py` checks fixed-effects outputs before paper use.
 - `scripts/build_policy_event_study_table.py` extracts policy event-study lead and lag coefficients after policy fixed-effects models are run.
+- `scripts/build_reviewer_tables.py` builds model cards, model-sample attrition rows, and a metadata flag glossary for reviewer-facing appendices.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
+- `docs/research_workflow.md` explains the path from the upstream `IPEDSDB_Panel` build to this repo's analysis panel, audits, model samples, and estimates.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
 - `docs/design_justification.md` ties the empirical design choices to source rules, prior work, and theory.
 - `docs/headroom_measurement.md` defines the preferred headroom measure and the claim boundary for paper language.
@@ -63,6 +86,8 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/pre_estimation_readiness.md` records the current complete-case model sample checks.
 - `docs/fixed_effects_baseline.md` records the current baseline fixed-effects estimates and diagnostics.
 - `docs/estimator_validation.md` documents the optional standard-estimator cross-check.
+- `docs/model_review_tables.md` documents the reviewer-facing model-card, sample-attrition, and metadata-glossary outputs.
+- `docs/metadata_glossary.md` explains the retained IPEDS metadata, imputation, revision, and parent-child fields in plain language.
 - `docs/policy_exposure_design.md` documents the 2017 year-round Pell exposure design.
 - `docs/policy_exposure_estimates.md` records the current policy-exposure estimates and diagnostics.
 - `docs/policy_shocks.md` documents the Pell policy-shock registry and its paper-use boundary.
@@ -199,6 +224,13 @@ The estimate-table script writes:
 - `outputs/estimate_tables/fixed_effects_main_table.tex`
 - `outputs/estimate_tables/fixed_effects_main_table.docx`
 - `outputs/estimate_tables/fixed_effects_table_summary.json`
+
+The reviewer-table script writes:
+
+- `outputs/reviewer_tables/model_cards.csv`
+- `outputs/reviewer_tables/model_sample_attrition.csv`
+- `outputs/reviewer_tables/metadata_flag_glossary.csv`
+- `outputs/reviewer_tables/reviewer_tables_summary.json`
 
 The policy-shock audit writes:
 

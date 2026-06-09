@@ -27,7 +27,12 @@ def require_panel_ols():
 
 
 def supported_fixed_effects(spec: ModelSpec) -> bool:
-    return set(spec.fixed_effects).issubset({"UNITID", "year"})
+    effects = set(spec.fixed_effects)
+    if not effects.issubset({"UNITID", "year", "SECTOR_YEAR"}):
+        return False
+    if "SECTOR_YEAR" in effects and "year" in effects:
+        return False
+    return True
 
 
 def linearmodels_fit(sample: pd.DataFrame, spec: ModelSpec) -> pd.DataFrame:
@@ -51,6 +56,10 @@ def linearmodels_fit(sample: pd.DataFrame, spec: ModelSpec) -> pd.DataFrame:
         "drop_absorbed": True,
         "check_rank": True,
     }
+    if "SECTOR_YEAR" in spec.fixed_effects:
+        other_effects = work[["SECTOR_YEAR"]].copy()
+        other_effects["SECTOR_YEAR"] = pd.Categorical(other_effects["SECTOR_YEAR"]).codes
+        model_kwargs["other_effects"] = other_effects
     if weights is not None:
         aligned_weights = work.pop("_crosscheck_weight").astype(float)
         model_kwargs["weights"] = aligned_weights
@@ -96,6 +105,7 @@ def run_fixed_effects_crosscheck(
     estimate_tolerance: float = 1e-6,
     std_error_tolerance: float = 1e-4,
     focal_only: bool = True,
+    skip_unsupported: bool = True,
 ) -> dict[str, Path]:
     specs = load_model_specs(config)
     selected = set(model_ids) if model_ids else None
@@ -109,7 +119,19 @@ def run_fixed_effects_crosscheck(
 
     current = load_current_coefficients(fixed_effects_dir)
     frames: list[pd.DataFrame] = []
+    skipped_rows: list[dict[str, object]] = []
     for spec in specs:
+        if not supported_fixed_effects(spec):
+            if not skip_unsupported:
+                raise ValueError(f"{spec.model_id} has unsupported fixed effects for the linearmodels cross-check: {spec.fixed_effects}")
+            skipped_rows.append(
+                {
+                    "model_id": spec.model_id,
+                    "fixed_effects": ";".join(spec.fixed_effects),
+                    "reason": "unsupported_fixed_effect_structure",
+                }
+            )
+            continue
         sample_path = sample_dir / f"{spec.model_id}.parquet"
         if not sample_path.exists():
             raise FileNotFoundError(f"Model sample not found for {spec.model_id}: {sample_path}")
@@ -117,6 +139,8 @@ def run_fixed_effects_crosscheck(
         frames.append(linearmodels_fit(sample, spec))
 
     check = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if check.empty:
+        raise ValueError("No supported model specifications were available for cross-checking")
     if focal_only and "is_focal" in check.columns:
         check = check[check["is_focal"].astype(bool)].copy()
     merged = check.merge(
@@ -143,8 +167,10 @@ def run_fixed_effects_crosscheck(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     comparison_path = output_dir / "fixed_effects_linearmodels_comparison.csv"
+    skipped_path = output_dir / "fixed_effects_linearmodels_skipped.csv"
     summary_path = output_dir / "fixed_effects_linearmodels_summary.json"
     merged.to_csv(comparison_path, index=False)
+    pd.DataFrame(skipped_rows).to_csv(skipped_path, index=False)
     failed = merged[~merged["passes_crosscheck"].fillna(False)].copy()
     summary = {
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -152,13 +178,15 @@ def run_fixed_effects_crosscheck(
         "config": str(config),
         "fixed_effects_dir": str(fixed_effects_dir),
         "terms_checked": int(len(merged)),
+        "models_checked": int(merged["model_id"].nunique()) if not merged.empty else 0,
+        "models_skipped": int(len(skipped_rows)),
         "failed_terms": int(len(failed)),
         "estimate_tolerance": estimate_tolerance,
         "std_error_tolerance": std_error_tolerance,
         "focal_only": focal_only,
         "max_estimate_abs_diff": float(merged["estimate_abs_diff"].max()) if not merged.empty else None,
         "max_std_error_abs_diff": float(merged["std_error_abs_diff"].max()) if not merged.empty else None,
-        "outputs": {"comparison": str(comparison_path)},
+        "outputs": {"comparison": str(comparison_path), "skipped": str(skipped_path)},
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     if not failed.empty:
@@ -177,6 +205,7 @@ def main() -> None:
     parser.add_argument("--estimate-tolerance", type=float, default=1e-6)
     parser.add_argument("--std-error-tolerance", type=float, default=1e-4)
     parser.add_argument("--all-terms", action="store_true", help="Check controls as well as focal coefficients.")
+    parser.add_argument("--fail-unsupported", action="store_true", help="Fail if any selected model uses unsupported fixed effects.")
     args = parser.parse_args()
     paths = run_fixed_effects_crosscheck(
         sample_dir=args.sample_dir,
@@ -187,6 +216,7 @@ def main() -> None:
         estimate_tolerance=args.estimate_tolerance,
         std_error_tolerance=args.std_error_tolerance,
         focal_only=not args.all_terms,
+        skip_unsupported=not args.fail_unsupported,
     )
     print(f"Wrote {paths['summary'].parent}")
 

@@ -16,6 +16,8 @@ REFERENCE_YEAR = 2016
 MODEL_OUTCOMES = {
     "yrp2017_event_headroom": "HEADROOM_MAIN",
     "yrp2017_event_inst_grant": "IGRNT_PER_FTFT_COHORT",
+    "syfe_yrp2017_event_headroom": "HEADROOM_MAIN",
+    "syfe_yrp2017_event_inst_grant": "IGRNT_PER_FTFT_COHORT",
 }
 
 

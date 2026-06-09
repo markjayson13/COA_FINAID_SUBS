@@ -174,6 +174,14 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
 
 This writes CSV, LaTeX, and Word versions of the fixed-effects table.
 
+To build reviewer-facing model cards, sample-attrition rows, and the metadata glossary:
+
+```bash
+PYTHONPATH=src python scripts/build_reviewer_tables.py
+```
+
+This writes `outputs/reviewer_tables/`. The files summarize the configured models, complete-case loss, estimation diagnostics, and metadata flags for appendix review.
+
 To audit the Pell policy-shock registry before building any exposure design:
 
 ```bash
@@ -191,8 +199,11 @@ PYTHONPATH=src python scripts/build_policy_exposure_panels.py \
   --panel-dir outputs/analysis_panel \
   --output-dir outputs/policy_exposure \
   --policy-config config/policy_shocks.csv \
-  --design-config config/policy_exposure_designs.csv
+  --design-config config/policy_exposure_designs.csv \
+  --price-index-config config/policy_price_index.csv
 ```
+
+The exposure panel includes the 2017 year-round Pell design and the repeated maximum Pell design. The repeated-shock design uses real maximum Pell changes in 2023 dollars, with nominal and large-increase checks.
 
 To check the policy-exposure model samples before estimation:
 
@@ -258,12 +269,9 @@ PYTHONPATH=src python scripts/crosscheck_fixed_effects.py \
   --sample-dir outputs/model_samples/samples \
   --fixed-effects-dir outputs/fixed_effects \
   --output-dir outputs/fixed_effects_crosscheck \
-  --config config/model_specifications.csv \
-  --model-id fe_inst_grant_per_student \
-  --model-id public_inst_grant \
-  --model-id private_np_inst_grant
+  --config config/model_specifications.csv
 ```
 
-This check is separate from the built-in estimator. It is meant to verify the headline coefficients before manuscript use, not to replace the transparent local estimator.
+This check is separate from the built-in estimator. It verifies all configured focal coefficients that the standard panel estimator supports, including the sector-year fixed-effect checks. It is not a replacement for the transparent local estimator.
 
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 9, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 355 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

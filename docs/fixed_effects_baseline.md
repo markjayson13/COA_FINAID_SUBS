@@ -91,4 +91,6 @@ The main table should report the public and private nonprofit estimates separate
 
 The refreshed public-sector FE specification excludes raw `FIN_STATE_LOCAL_APPROPS_PUBLIC`. The variable remains in the analysis panel for descriptive and diagnostic work, but its raw dollar level caused unstable absorbed fixed-effect estimation when used as a default control. The baseline validation now reports zero estimation issues across all 15 configured models.
 
+The headline focal coefficients for the combined institutional-grant model, the public-sector model, and the private nonprofit model were cross-checked against `linearmodels.PanelOLS`. The comparison covered three focal coefficients and found zero failures. The largest absolute coefficient difference was `1.39e-16`; the largest absolute standard-error difference was `1.49e-05`.
+
 `scripts/build_estimate_tables.py` now exports the current fixed-effects table to CSV, LaTeX, and Word under `outputs/estimate_tables/`.

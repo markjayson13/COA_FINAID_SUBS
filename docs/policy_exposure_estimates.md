@@ -26,6 +26,10 @@ PYTHONPATH=src python scripts/run_fixed_effects.py \
   --output-dir outputs/policy_fixed_effects \
   --config config/policy_exposure_model_specifications.csv
 
+PYTHONPATH=src python scripts/build_policy_event_study_table.py \
+  --fixed-effects-dir outputs/policy_fixed_effects \
+  --output-dir outputs/policy_event_study
+
 PYTHONPATH=src python scripts/validate_fixed_effects_outputs.py \
   --fixed-effects-dir outputs/policy_fixed_effects \
   --output-dir outputs/policy_estimation_validation \
@@ -42,7 +46,7 @@ The exposure build passed with zero issues.
 | Public | 11,215 | 882 | 7,711 | 865 | 680 |
 | Private nonprofit | 24,228 | 1,903 | 16,172 | 1,825 | 1,303 |
 
-The model-plan audit found zero missing model variables across 15 policy-exposure specifications.
+The model-plan audit found zero missing model variables across 17 policy-exposure specifications.
 
 ## Estimates
 
@@ -64,7 +68,18 @@ It is the 2014-2016 Pell-share exposure, standardized within pre-period sector, 
 | `public_yrp2017_headroom` | `HEADROOM_MAIN` | -40.40 | 67.92 | -0.59 | 5,854 | 603 |
 | `private_np_yrp2017_headroom` | `HEADROOM_MAIN` | -268.49 | 77.31 | -3.47 | 10,836 | 1,205 |
 
-All 15 models estimated without rank deficiency.
+All 17 models estimated without rank deficiency.
+
+## Event-study diagnostics
+
+The event-study specification uses 2016 as the omitted year. The 2014 and 2015 coefficients are pre-period lead checks.
+
+| Outcome | 2014 | 2015 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `HEADROOM_MAIN` | 64.71 | 26.90 | 61.75 | -46.23 | -106.48 | -150.70 | -254.08 | -308.96 | -295.52 |
+| `IGRNT_PER_FTFT_COHORT` | 449.01 | 237.30 | -243.36 | -587.28 | -847.76 | -1,058.25 | -1,396.37 | -1,461.98 | -1,878.44 |
+
+The headroom leads are not statistically sharp: 2014 has `t = 1.17`, and 2015 has `t = 0.71`. The institutional-grant leads are sharp before the 2017 restoration: 2014 has `t = 14.34`, and 2015 has `t = 10.45`. This reinforces the placebo result. The institutional-grant event-study path should be treated as evidence of different pre-existing trajectories, not as a causal year-round Pell effect.
 
 ## Sensitivity and placebo checks
 
@@ -88,7 +103,7 @@ The institutional-grant policy estimate is not clean causal evidence at this sta
 The numerical validation checks pass when placebo-signal checks are skipped:
 
 ```text
-15 models observed
+17 models observed
 0 rank-deficient models
 0 convergence issues
 0 tiny focal standard errors

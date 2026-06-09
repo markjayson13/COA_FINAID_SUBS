@@ -9,6 +9,11 @@ dependencies = [
   "python-docx>=1.1",
 ]
 
+[project.optional-dependencies]
+validation = [
+  "linearmodels>=6.0",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

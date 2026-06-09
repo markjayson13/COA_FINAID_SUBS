@@ -13,7 +13,9 @@ from coa_finaid_subs.descriptive_decomposition import build_descriptive_decompos
 from coa_finaid_subs.descstat_tables import build_descstat_tables
 from coa_finaid_subs.estimate_tables import build_estimate_tables
 from coa_finaid_subs.estimation_validation import validate_fixed_effects_outputs
+from coa_finaid_subs.event_study_tables import build_policy_event_study_table
 from coa_finaid_subs.fixed_effects import run_fixed_effects
+from coa_finaid_subs.fixed_effects_crosscheck import run_fixed_effects_crosscheck
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.model_samples import build_model_samples
@@ -1208,6 +1210,55 @@ def test_fixed_effects_estimator_recovers_known_within_coefficient(tmp_path: Pat
     assert int(diagnostics["matrix_rank"]) == 1
 
 
+def test_fixed_effects_crosscheck_matches_linearmodels_on_focal_coefficient(tmp_path: Path) -> None:
+    pytest.importorskip("linearmodels")
+    sample_dir = tmp_path / "model_samples" / "samples"
+    fixed_effects_dir = tmp_path / "fixed_effects"
+    crosscheck_dir = tmp_path / "fixed_effects_crosscheck"
+    config_path = tmp_path / "model_specifications.csv"
+    rows = []
+    unit_effects = {unitid: unitid * 3.0 for unitid in range(1, 7)}
+    year_effects = {year: (year - 2010) * 2.0 for year in range(2010, 2015)}
+    for unitid in unit_effects:
+        for year in year_effects:
+            headroom = float((unitid - 3) * (year - 2011) + unitid * 0.25)
+            outcome = 1.75 * headroom + unit_effects[unitid] + year_effects[year]
+            rows.append(
+                {
+                    "UNITID": unitid,
+                    "year": year,
+                    "HEADROOM_MAIN": headroom,
+                    "IGRNT_PER_FTFT_COHORT": outcome,
+                    "model_id": "known_model",
+                }
+            )
+    write_parquet(sample_dir / "known_model.parquet", rows)
+    config_path.write_text(
+        "\n".join(
+            [
+                "model_id,stage,sample_scope,analysis_panel,dependent_variable,focal_variable,controls,weight_variable,fixed_effects,cluster_level,role,notes",
+                "known_model,baseline_fe,public_private_nonprofit,analysis.parquet,IGRNT_PER_FTFT_COHORT,HEADROOM_MAIN,,,UNITID;year,UNITID,main,Known coefficient check.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_fixed_effects(sample_dir=sample_dir, output_dir=fixed_effects_dir, config=config_path)
+    paths = run_fixed_effects_crosscheck(
+        sample_dir=sample_dir,
+        output_dir=crosscheck_dir,
+        config=config_path,
+        fixed_effects_dir=fixed_effects_dir,
+        model_ids=["known_model"],
+    )
+    comparison = pd.read_csv(paths["comparison"])
+
+    assert len(comparison) == 1
+    assert comparison["passes_crosscheck"].iloc[0]
+    assert comparison["estimate_abs_diff"].iloc[0] <= 1e-6
+
+
 def test_fixed_effects_estimator_recovers_known_sector_interaction(tmp_path: Path) -> None:
     sample_dir = tmp_path / "model_samples" / "samples"
     output_dir = tmp_path / "fixed_effects"
@@ -1423,10 +1474,16 @@ def test_policy_exposure_builder_writes_exposure_panels(tmp_path: Path) -> None:
     assert "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
     assert "PELL_PER_FTFT_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
     assert "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016" in panel.columns
+    assert "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014" in panel.columns
+    assert "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2018" in panel.columns
+    assert "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2016" not in panel.columns
     assert "PLACEBO_2016_WINDOW" in panel.columns
     assert panel["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna().sum() == len(panel)
     assert panel.loc[panel["year"].eq(2016), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].eq(0).all()
     assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].abs().sum() > 0
+    assert panel.loc[panel["year"].eq(2014), "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014"].abs().sum() > 0
+    assert panel.loc[panel["year"].eq(2015), "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014"].eq(0).all()
+    assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2018"].abs().sum() > 0
     assert panel.loc[panel["year"].eq(2015), "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"].eq(0).all()
     assert panel.loc[panel["year"].eq(2016), "PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"].abs().sum() > 0
     summary = pd.read_json(paths["summary_json"], typ="series")
@@ -1487,3 +1544,51 @@ def test_estimation_validation_fails_tiny_focal_standard_error(tmp_path: Path) -
 
     issues = pd.read_csv(tmp_path / "validation" / "estimation_validation_issues.csv")
     assert {"tiny_focal_std_error", "extreme_focal_t_stat", "absorption_iteration_cap"} <= set(issues["check"])
+
+
+def test_policy_event_study_table_extracts_dynamic_coefficients(tmp_path: Path) -> None:
+    fixed_dir = tmp_path / "policy_fixed_effects"
+    fixed_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "yrp2017_event_headroom",
+                "term": "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2014",
+                "estimate": -10.0,
+                "std_error": 2.0,
+                "t_stat": -5.0,
+                "p_value_normal": 0.01,
+                "nobs": 100,
+                "clusters": 20,
+            },
+            {
+                "model_id": "yrp2017_event_headroom",
+                "term": "PELL_EXPOSURE_PRE2017_Z_X_EVENT_2017",
+                "estimate": 12.0,
+                "std_error": 3.0,
+                "t_stat": 4.0,
+                "p_value_normal": 0.02,
+                "nobs": 100,
+                "clusters": 20,
+            },
+            {
+                "model_id": "yrp2017_headroom",
+                "term": "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017",
+                "estimate": 20.0,
+                "std_error": 5.0,
+                "t_stat": 4.0,
+                "p_value_normal": 0.02,
+                "nobs": 100,
+                "clusters": 20,
+            },
+        ]
+    ).to_csv(fixed_dir / "fixed_effects_coefficients.csv", index=False)
+
+    paths = build_policy_event_study_table(fixed_effects_dir=fixed_dir, output_dir=tmp_path / "event_study")
+    table = pd.read_csv(paths["coefficients"])
+
+    assert set(table["event_year"]) == {2014, 2016, 2017}
+    reference = table[table["term"].eq("omitted_reference_year")].iloc[0]
+    assert reference["estimate"] == pytest.approx(0.0)
+    assert reference["relative_year"] == 0
+    assert "yrp2017_headroom" not in set(table["model_id"])

@@ -10,4 +10,4 @@ off_nf_room_board,CHG7AY0,Off-campus room and board not with family,dollars,allo
 off_nf_other_expenses,CHG8AY0,Off-campus other expenses not with family,dollars,allowance_component,CHG8AY0,,SCFA1N,false,true,false,Allowance component of main headroom.
 on_campus_dollars,HEADROOM_ON,On-campus non-tuition COA margin,dollars,living_arrangement_check,CHG4AY0;CHG5AY0;CHG6AY0,,SCFA1N,false,true,false,Living-arrangement sensitivity.
 off_with_family_dollars,HEADROOM_OFF_WF,Off-campus with-family non-tuition COA margin,dollars,living_arrangement_check,CHG4AY0;CHG9AY0,,SCFA1N,false,true,false,Living-arrangement sensitivity.
-in_district_dollars,HEADROOM_IN_DISTRICT,In-district non-tuition COA margin,dollars,living_arrangement_check,CHG4AY0;CHG7AY0;CHG8AY0,,SCFA1N,false,true,false,Public-sector diagnostic where in-district tuition is relevant.
+in_district_dollars,HEADROOM_IN_DISTRICT,Main allowance margin paired with in-district COA,dollars,denominator_check,CHG4AY0;CHG7AY0;CHG8AY0,COA_IN_DISTRICT,SCFA1N,false,true,false,Same allowance numerator as HEADROOM_MAIN; use HEADROOM_SHARE_IN_DISTRICT for the in-district denominator check.

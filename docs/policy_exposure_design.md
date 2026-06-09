@@ -48,8 +48,11 @@ The first sensitivity set adds:
 - a sample requiring all three pre-period exposure years
 - a sample that excludes 2020 and 2021
 - a 2016 placebo check using 2014-2015 Pell exposure
+- event-year interactions from 2014 through 2023, with 2016 omitted
 
 The placebo check is a pre-trend diagnostic. A sharp placebo coefficient means the policy-exposure design is detecting differential movement before the 2017 policy event.
+
+The event-study specification estimates exposure-by-year interactions in one model. The omitted year is 2016, the last pre-restoration year. The 2014 and 2015 coefficients are lead checks; the 2017-2023 coefficients are post-restoration dynamics. The event-study table is diagnostic unless the lead coefficients support the parallel-trend story for the outcome.
 
 ## Why this design comes before estimation
 
@@ -61,6 +64,14 @@ Outcome_it = institution fixed effects + year fixed effects
            + controls_it + error_it
 ```
 
+Event-study form:
+
+```text
+Outcome_it = institution fixed effects + year fixed effects
+           + sum over k != 2016 beta_k(Pell exposure_i x 1[year = k])
+           + controls_it + error_it
+```
+
 The coefficient does not say that the policy changed one institution and not another. It compares institutions with different pre-period Pell exposure before and after the national policy change.
 
 ## Files
@@ -68,6 +79,7 @@ The coefficient does not say that the policy changed one institution and not ano
 - `config/policy_exposure_designs.csv` defines the event window and pre-period rule.
 - `config/policy_exposure_model_specifications.csv` defines the first policy-exposure models.
 - `scripts/build_policy_exposure_panels.py` writes the exposure panels and audit files.
+- `scripts/build_policy_event_study_table.py` writes the event-study coefficient table after policy fixed-effects models are run.
 - `src/coa_finaid_subs/policy_exposures.py` contains the exposure construction.
 - `scripts/validate_fixed_effects_outputs.py` checks estimation outputs for numerical and placebo-design problems.
 

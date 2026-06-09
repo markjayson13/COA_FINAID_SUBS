@@ -1618,7 +1618,7 @@ def derived_manifest_rows() -> pd.DataFrame:
         {
             "varname": "HEADROOM_IN_DISTRICT",
             "group": "derived_headroom",
-            "role": "in-district non-tuition headroom",
+            "role": "main allowance numerator paired with in-district total COA",
             "required": False,
         },
         {"varname": "HEADROOM_ON", "group": "derived_headroom", "role": "on-campus non-tuition headroom", "required": False},
@@ -1628,7 +1628,7 @@ def derived_manifest_rows() -> pd.DataFrame:
         {
             "varname": "HEADROOM_SHARE_IN_DISTRICT",
             "group": "derived_headroom",
-            "role": "in-district non-tuition share",
+            "role": "main allowance numerator divided by in-district total COA",
             "required": False,
         },
         {"varname": "HEADROOM_SHARE_ON", "group": "derived_headroom", "role": "on-campus non-tuition share", "required": False},

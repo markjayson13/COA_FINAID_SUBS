@@ -15,13 +15,13 @@ This note ties the research design to source rules, prior work, and theory. It i
 | IPEDS-FIN | NCES, IPEDS Finance component: https://nces.ed.gov/ipeds/survey-components/2 |
 | CELLINI-GOLDIN | Cellini and Goldin, 2014, "Does Federal Student Aid Raise Tuition? New Evidence on For-Profit Colleges," American Economic Journal: Economic Policy: https://www.aeaweb.org/articles?id=10.1257/pol.6.4.174 |
 | LUCCA-NADAULD-SHEN | Lucca, Nadauld, and Shen, 2019, "Credit Supply and the Rise in College Tuition," Review of Financial Studies: https://doi.org/10.1093/rfs/hhy069 |
-| AVERY-HOXBY | Avery and Hoxby, 2003/2004, "Do and Should Financial Aid Packages Affect Students' College Choices?": https://www.nber.org/papers/w9482 |
+| AVERY-HOXBY | Avery and Hoxby, 2003, "Do and Should Financial Aid Packages Affect Students' College Choices?," NBER Working Paper 9482: https://doi.org/10.3386/w9482 |
 | MARTIN | Martin, 2002, "Tuition Discounting: Theory and Evidence," Economics of Education Review: https://doi.org/10.1016/S0272-7757(00)00053-4 |
-| CHESLOCK-RIGGS | Cheslock and Riggs, 2022/2023, "Ever-Increasing Listed Tuition and Institutional Aid," Educational Evaluation and Policy Analysis: https://doi.org/10.3102/01623737221094565 |
+| CHESLOCK-RIGGS | Cheslock and Riggs, 2023, "Ever-Increasing Listed Tuition and Institutional Aid," Educational Evaluation and Policy Analysis: https://doi.org/10.3102/01623737221094565 |
 | WINSTON | Winston, 1999, "Subsidies, Hierarchy and Peers: The Awkward Economics of Higher Education," Journal of Economic Perspectives: https://doi.org/10.1257/jep.13.1.13 |
 | HOXBY-MARKET | Hoxby, 1997, "How the Changing Market Structure of U.S. Higher Education Explains College Tuition": https://www.nber.org/papers/w6323 |
 | HOXBY-SELECTIVITY | Hoxby, 2009, "The Changing Selectivity of American Colleges," Journal of Economic Perspectives: https://www.aeaweb.org/articles?id=10.1257/jep.23.4.95 |
-| DALE-KRUEGER | Dale and Krueger, 1999/2002, "Estimating the Payoff to Attending a More Selective College": https://www.nber.org/papers/w7322 |
+| DALE-KRUEGER | Dale and Krueger, 2002, "Estimating the Payoff to Attending a More Selective College: An Application of Selection on Observables and Unobservables," Quarterly Journal of Economics: https://www.nber.org/papers/w7322 |
 | TOLBERT | Tolbert, 1985, "Institutional Environments and Resource Dependence: Sources of Administrative Structure in Institutions of Higher Education": https://hdl.handle.net/1813/75698 |
 | BORUSYAK-HULL-JARAVEL | Borusyak, Hull, and Jaravel, 2022, "Quasi-Experimental Shift-Share Research Designs," Review of Economic Studies: https://doi.org/10.1093/restud/rdab030 |
 | GOLDSMITH-PINKHAM-SORKIN-SWIFT | Goldsmith-Pinkham, Sorkin, and Swift, 2020, "Bartik Instruments: What, When, Why, and How," American Economic Review: https://doi.org/10.1257/aer.20181047 |

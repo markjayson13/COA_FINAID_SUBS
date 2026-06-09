@@ -27,10 +27,12 @@ The analysis should report:
 - `LN_HEADROOM_MAIN`
 - `HEADROOM_ON`
 - `HEADROOM_OFF_WF`
-- `HEADROOM_IN_DISTRICT`
+- `HEADROOM_SHARE_IN_DISTRICT`
 - `CHG2AY0`, `CHG4AY0`, `CHG7AY0`, `CHG8AY0`
 
 These checks separate charge-like variation from allowance-like variation. They also show whether the result depends on the off-campus not-with-family assumption.
+
+`HEADROOM_IN_DISTRICT` is not a separate raw allowance numerator. It equals the main off-campus allowance sum. Its purpose is to pair that numerator with `COA_IN_DISTRICT` through `HEADROOM_SHARE_IN_DISTRICT`, which asks whether the denominator choice changes the public-sector diagnostic.
 
 ## Audit outputs
 

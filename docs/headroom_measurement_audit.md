@@ -47,3 +47,5 @@ The paper should keep the following boundary:
 > Headroom is a published institution-year COA margin. It is not a student-level measure of unused aid eligibility.
 
 The best baseline specification uses `HEADROOM_MAIN` and sector-specific estimates. `HEADROOM_MAIN_SHARE_COA`, `HEADROOM_MAIN_SHARE_TUITION`, `LN_HEADROOM_MAIN`, `HEADROOM_ON`, `HEADROOM_OFF_WF`, and the component variables belong in the measurement and sensitivity tables.
+
+The in-district check is a denominator check, not a second raw allowance measure. `HEADROOM_IN_DISTRICT` uses the same allowance numerator as `HEADROOM_MAIN`; `HEADROOM_SHARE_IN_DISTRICT` is the public-sector diagnostic that changes the total COA denominator.

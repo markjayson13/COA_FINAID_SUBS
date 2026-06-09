@@ -126,6 +126,8 @@ The national Pell-shock registry is now recorded in `config/policy_shocks.csv` a
 
 The registry is not an institution-level treatment by itself because the Pell schedule is national. Exposure must be measured before the shock period. The first policy-exposure design uses the 2017 restoration of year-round Pell and measures Pell exposure from 2014-2016. It is documented in `docs/policy_exposure_design.md`.
 
+The policy design now includes event-study interactions for 2014-2023, omitting 2016. The 2014 and 2015 coefficients are lead checks. The 2017-2023 coefficients show post-restoration dynamics. These estimates remain diagnostic until the lead and placebo checks are clean for the outcome.
+
 ### Stage 4: mechanism and falsification checks
 
 The mechanism checks should compare allowance-like COA components with charge-like components. If headroom is an institutional allowance margin, off-campus room and board plus other expenses should be more responsive than tuition and fees.

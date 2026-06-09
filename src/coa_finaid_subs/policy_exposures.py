@@ -45,6 +45,8 @@ EXPOSURE_INPUTS = {
     "FTFT_COHORT_EXPOSURE_PRE2017": "SCFA1N",
 }
 
+EVENT_STUDY_REFERENCE_YEAR = 2016
+
 POLICY_RENAME = {
     "pell_max_award": "POLICY_PELL_MAX_AWARD",
     "pell_max_award_delta": "POLICY_PELL_MAX_AWARD_DELTA",
@@ -193,6 +195,7 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
     pre_start = int(design["pre_start"])
     post_start = int(design["post_start"])
     post_end = int(design["post_end"])
+    event_study_years = [year for year in range(pre_start, post_end + 1) if year != EVENT_STUDY_REFERENCE_YEAR]
 
     work = panel.copy()
     work["year"] = safe_numeric(work["year"]).astype("Int64")
@@ -220,6 +223,10 @@ def build_scope_panel(panel: pd.DataFrame, design: pd.Series, policy: pd.DataFra
             continue
         work[f"{exposure_name}_Z_X_POST_YRP_2017"] = safe_numeric(work[z_col]) * work["POST_YRP_2017"].astype(float)
         work[f"{exposure_name}_Z_X_PELL_MAX_AWARD_DELTA_100"] = safe_numeric(work[z_col]) * safe_numeric(work["PELL_MAX_AWARD_DELTA_100"])
+    if "PELL_EXPOSURE_PRE2017_Z_SECTOR" in work.columns:
+        exposure = safe_numeric(work["PELL_EXPOSURE_PRE2017_Z_SECTOR"])
+        for year in event_study_years:
+            work[f"PELL_EXPOSURE_PRE2017_Z_X_EVENT_{year}"] = exposure * work["year"].eq(year).astype(float)
     if "PELL_EXPOSURE_PRE2016_Z_SECTOR" in work.columns:
         work["PELL_EXPOSURE_PRE2016_Z_X_POST_PLACEBO_2016"] = (
             safe_numeric(work["PELL_EXPOSURE_PRE2016_Z_SECTOR"]) * work["POST_PLACEBO_2016"].astype(float)

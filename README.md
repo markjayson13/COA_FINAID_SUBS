@@ -47,10 +47,12 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/audit_model_plan.py` checks planned model variables and complete-case counts before estimation.
 - `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
 - `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
+- `scripts/crosscheck_fixed_effects.py` compares configured fixed-effects estimates with `linearmodels.PanelOLS` when the optional validation dependency is installed.
 - `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, LaTeX, and Word.
 - `scripts/build_policy_exposure_panels.py` builds audited pre-period exposure panels for policy-exposure models.
 - `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
 - `scripts/validate_fixed_effects_outputs.py` checks fixed-effects outputs before paper use.
+- `scripts/build_policy_event_study_table.py` extracts policy event-study lead and lag coefficients after policy fixed-effects models are run.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
@@ -60,6 +62,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/descriptive_decomposition.md` records the current sector trends and same-institution component changes.
 - `docs/pre_estimation_readiness.md` records the current complete-case model sample checks.
 - `docs/fixed_effects_baseline.md` records the current baseline fixed-effects estimates and diagnostics.
+- `docs/estimator_validation.md` documents the optional standard-estimator cross-check.
 - `docs/policy_exposure_design.md` documents the 2017 year-round Pell exposure design.
 - `docs/policy_exposure_estimates.md` records the current policy-exposure estimates and diagnostics.
 - `docs/policy_shocks.md` documents the Pell policy-shock registry and its paper-use boundary.
@@ -71,7 +74,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/outlier_audit.md` describes the audit-only distribution and extreme-value review before any winsorization decision.
 - `tests/` covers the main data-integrity checks with small synthetic panels.
 
-This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, the first fixed-effects estimation pass, a verified Pell policy-shock registry, and the first policy-exposure design. Manuscript exhibits remain a separate next step.
+This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, the fixed-effects estimation pass, a verified Pell policy-shock registry, event-study diagnostics for the first policy-exposure design, and exportable estimate tables. Manuscript exhibits remain a separate next step.
 
 ## Install
 

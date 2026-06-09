@@ -113,7 +113,7 @@ Outcome_it = institution fixed effects + year fixed effects + beta Exposure_i x 
 
 The national Pell-shock registry is now recorded in `config/policy_shocks.csv` and audited by `scripts/audit_policy_shocks.py`. The registry records maximum Pell award changes and additional Pell authority events from verified Federal Student Aid sources.
 
-The registry is not an institution-level treatment by itself because the Pell schedule is national. Exposure must be measured before the shock period. Candidate exposure measures include baseline Pell intensity, baseline loan intensity, and baseline institutional-grant intensity.
+The registry is not an institution-level treatment by itself because the Pell schedule is national. Exposure must be measured before the shock period. The first policy-exposure design uses the 2017 restoration of year-round Pell and measures Pell exposure from 2014-2016. It is documented in `docs/policy_exposure_design.md`.
 
 ### Stage 4: mechanism and falsification checks
 
@@ -159,6 +159,6 @@ Not allowed from IPEDS alone:
 
 ## Next implementation steps
 
-1. Define and audit predetermined exposure measures before estimating policy-exposure models.
-2. Keep policy-exposure designs separate from the baseline fixed-effects estimates.
+1. Run the policy-exposure model gate and estimate only from the audited exposure samples.
+2. Keep policy-exposure estimates separate from the baseline fixed-effects estimates.
 3. Add manuscript exhibit scripts only after the paper table order is fixed.

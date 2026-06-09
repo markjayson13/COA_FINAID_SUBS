@@ -16,6 +16,7 @@ from coa_finaid_subs.fixed_effects import run_fixed_effects
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.model_samples import build_model_samples
+from coa_finaid_subs.policy_exposures import build_policy_exposure_panels
 from coa_finaid_subs.policy_shocks import audit_policy_shock_frame, audit_policy_shocks, load_policy_shocks
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
@@ -1355,3 +1356,72 @@ def test_policy_shock_audit_fails_unofficial_source_url() -> None:
     audit = audit_policy_shock_frame(df)
 
     assert any("non-FSA source URLs" in issue for issue in audit.issues)
+
+
+def test_policy_exposure_builder_writes_exposure_panels(tmp_path: Path) -> None:
+    def rows_for_scope(sector: int, unit_start: int) -> list[dict]:
+        rows = []
+        for unit_offset, pell_share in enumerate((0.2, 0.5), start=0):
+            for year in range(2014, 2019):
+                rows.append(
+                    {
+                        "UNITID": unit_start + unit_offset,
+                        "year": year,
+                        "SECTOR": sector,
+                        "CONTROL": sector,
+                        "INSTNM": f"Institution {unit_start + unit_offset}",
+                        "STABBR": "NV",
+                        "PELL_SHARE_OF_TOTAL_GRANT_FTFT": pell_share + (year - 2014) * 0.01,
+                        "PGRNT_PER_FTFT_COHORT": 1_000 + 10 * year + unit_offset,
+                        "FLOAN_PER_FTFT_COHORT": 2_000 + 5 * year + unit_offset,
+                        "INST_GRANT_SHARE_OF_TOTAL_GRANT_FTFT": 0.4 - pell_share / 10,
+                        "IGRNT_PER_FTFT_COHORT": 3_000 + 3 * year + unit_offset,
+                        "SCFA1N": 100 + unit_offset,
+                        "HEADROOM_MAIN": 10_000 + 100 * (year - 2014),
+                        "HEADROOM_MAIN_SHARE_COA": 0.45,
+                        "OPEN_ADMISSIONS_FLAG": 0,
+                        "LN_SCFA1N": 4.6,
+                        "LN_FIN_TOTAL_REVENUE": 16.0,
+                        "LN_FIN_TOTAL_EXPENSES": 15.9,
+                        "LN_FIN_TOTAL_ASSETS": 17.0,
+                        "FIN_STATE_LOCAL_APPROPS_PUBLIC": 1_000,
+                    }
+                )
+        return rows
+
+    panel_dir = tmp_path / "analysis_panel"
+    panels = {
+        "public_private_nonprofit": rows_for_scope(1, 1) + rows_for_scope(2, 3),
+        "public": rows_for_scope(1, 1),
+        "private_nonprofit": rows_for_scope(2, 3),
+    }
+    filenames = {
+        "public_private_nonprofit": "analysis_panel_coa_headroom_2009_2023_public_private_nonprofit.parquet",
+        "public": "analysis_panel_coa_headroom_2009_2023_public.parquet",
+        "private_nonprofit": "analysis_panel_coa_headroom_2009_2023_private_nonprofit.parquet",
+    }
+    for scope, rows in panels.items():
+        write_parquet(panel_dir / scope / filenames[scope], rows)
+
+    design_config = tmp_path / "policy_exposure_designs.csv"
+    design_config.write_text(
+        "\n".join(
+            [
+                "design_id,event_year,pre_start,pre_end,post_start,post_end,min_pre_years,primary_exposure,notes",
+                "yrp2017,2017,2014,2016,2017,2018,2,PELL_EXPOSURE_PRE2017_Z_SECTOR,Test design.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "policy_exposure"
+
+    paths = build_policy_exposure_panels(panel_dir=panel_dir, output_dir=output_dir, design_config=design_config)
+
+    assert paths["public_private_nonprofit_panel"].exists()
+    panel = pd.read_parquet(paths["public_private_nonprofit_panel"])
+    assert "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017" in panel.columns
+    assert panel["PELL_EXPOSURE_PRE2017_Z_SECTOR"].notna().sum() == len(panel)
+    assert panel.loc[panel["year"].eq(2016), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].eq(0).all()
+    assert panel.loc[panel["year"].eq(2018), "PELL_EXPOSURE_PRE2017_Z_X_POST_YRP_2017"].abs().sum() > 0
+    summary = pd.read_json(paths["summary_json"], typ="series")
+    assert int(summary["issue_count"]) == 0

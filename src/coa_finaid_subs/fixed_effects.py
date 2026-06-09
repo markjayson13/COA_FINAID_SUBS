@@ -44,7 +44,7 @@ def absorb_fixed_effects(
     fixed_effects: pd.DataFrame,
     weights: pd.Series | None = None,
     tolerance: float = 1e-10,
-    max_iterations: int = 100,
+    max_iterations: int = 1_000,
 ) -> tuple[pd.DataFrame, int, float]:
     residualized = values.astype(float).copy()
     if fixed_effects.empty:

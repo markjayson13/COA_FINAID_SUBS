@@ -35,6 +35,8 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `config/descstat_variables.csv` lists the variables and caps used for descriptive-statistics exhibits.
 - `config/headroom_measures.csv` lists the main headroom measure and the component checks used before estimation.
 - `config/model_specifications.csv` lists the first model specifications used by the sample builder and fixed-effects estimator.
+- `config/policy_exposure_designs.csv` defines the first pre-period exposure design for the 2017 year-round Pell restoration.
+- `config/policy_exposure_model_specifications.csv` lists the first policy-exposure model specifications.
 - `config/policy_shocks.csv` records verified Pell Grant schedule changes and year-round Pell authority events.
 - `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
@@ -46,6 +48,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
 - `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
 - `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, LaTeX, and Word.
+- `scripts/build_policy_exposure_panels.py` builds audited pre-period exposure panels for policy-exposure models.
 - `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
@@ -55,6 +58,8 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/descriptive_decomposition.md` records the current sector trends and same-institution component changes.
 - `docs/pre_estimation_readiness.md` records the current complete-case model sample checks.
 - `docs/fixed_effects_baseline.md` records the current baseline fixed-effects estimates and diagnostics.
+- `docs/policy_exposure_design.md` documents the 2017 year-round Pell exposure design.
+- `docs/policy_exposure_estimates.md` records the current policy-exposure estimates and diagnostics.
 - `docs/policy_shocks.md` documents the Pell policy-shock registry and its paper-use boundary.
 - `docs/research_design.md` fixes the first paper design, claim boundaries, and model sequence.
 - `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
@@ -64,7 +69,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/outlier_audit.md` describes the audit-only distribution and extreme-value review before any winsorization decision.
 - `tests/` covers the main data-integrity checks with small synthetic panels.
 
-This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, the first fixed-effects estimation pass, and a verified Pell policy-shock registry. Policy-exposure models and manuscript exhibits remain separate next steps.
+This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, the first fixed-effects estimation pass, a verified Pell policy-shock registry, and the first policy-exposure design. Manuscript exhibits remain a separate next step.
 
 ## Install
 
@@ -194,6 +199,24 @@ The policy-shock audit writes:
 
 - `outputs/policy_shocks/policy_shock_audit.csv`
 - `outputs/policy_shocks/policy_shock_summary.json`
+
+The policy-exposure builder writes:
+
+- `outputs/policy_exposure/policy_exposure_summary.csv`
+- `outputs/policy_exposure/policy_exposure_summary.json`
+- `outputs/policy_exposure/<scope>/policy_exposure_panel_<scope>.parquet`
+- `outputs/policy_exposure/<scope>/policy_exposure_unit_audit.csv`
+- `outputs/policy_exposure/<scope>/policy_exposure_by_year.csv`
+
+The policy-exposure model gate and estimator write:
+
+- `outputs/policy_model_plan/model_specification_coverage.csv`
+- `outputs/policy_model_samples/model_sample_manifest.csv`
+- `outputs/policy_model_samples/samples/`
+- `outputs/policy_fixed_effects/fixed_effects_coefficients.csv`
+- `outputs/policy_fixed_effects/fixed_effects_focal_coefficients.csv`
+- `outputs/policy_fixed_effects/fixed_effects_model_diagnostics.csv`
+- `outputs/policy_fixed_effects/fixed_effects_summary.json`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

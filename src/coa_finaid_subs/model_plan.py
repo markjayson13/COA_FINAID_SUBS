@@ -114,7 +114,7 @@ def model_terms_for_spec(spec: ModelSpec) -> list[str]:
 def filter_source_variables(spec: ModelSpec) -> list[str]:
     if spec.sample_filter == "metadata_clean":
         return ["FLAG_IPEDS_ANY_METADATA_EXPOSURE"]
-    if spec.sample_filter in {"min_years_10", "balanced_full_window", "no_suspect_aid_zero"}:
+    if spec.sample_filter in {"min_years_10", "balanced_full_window", "no_suspect_aid_zero", "yrp_2017_window"}:
         return ["UNITID", "year"]
     return []
 
@@ -199,6 +199,10 @@ def sample_filter_mask(frame: pd.DataFrame, spec: ModelSpec, scope_dir: Path) ->
         suspect_keys = set(zip(pd.to_numeric(suspect["UNITID"], errors="coerce"), pd.to_numeric(suspect["year"], errors="coerce")))
         keys = list(zip(pd.to_numeric(frame["UNITID"], errors="coerce"), pd.to_numeric(frame["year"], errors="coerce")))
         return pd.Series([key not in suspect_keys for key in keys], index=frame.index)
+
+    if spec.sample_filter == "yrp_2017_window":
+        years = pd.to_numeric(frame["year"], errors="coerce")
+        return years.between(2014, 2023)
 
     raise ValueError(f"Unknown sample_filter for {spec.model_id}: {spec.sample_filter}")
 

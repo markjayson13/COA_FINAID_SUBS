@@ -184,4 +184,41 @@ PYTHONPATH=src python scripts/audit_policy_shocks.py \
 
 This checks the verified Federal Student Aid source registry and writes policy-shock audit tables. It does not estimate policy-exposure models.
 
+To build the first policy-exposure panels:
+
+```bash
+PYTHONPATH=src python scripts/build_policy_exposure_panels.py \
+  --panel-dir outputs/analysis_panel \
+  --output-dir outputs/policy_exposure \
+  --policy-config config/policy_shocks.csv \
+  --design-config config/policy_exposure_designs.csv
+```
+
+To check the policy-exposure model samples before estimation:
+
+```bash
+PYTHONPATH=src python scripts/audit_model_plan.py \
+  --panel-dir outputs/policy_exposure \
+  --output-dir outputs/policy_model_plan \
+  --config config/policy_exposure_model_specifications.csv
+```
+
+To materialize policy-exposure model samples:
+
+```bash
+PYTHONPATH=src python scripts/build_model_samples.py \
+  --panel-dir outputs/policy_exposure \
+  --output-dir outputs/policy_model_samples \
+  --config config/policy_exposure_model_specifications.csv
+```
+
+To estimate the policy-exposure models:
+
+```bash
+PYTHONPATH=src python scripts/run_fixed_effects.py \
+  --sample-dir outputs/policy_model_samples/samples \
+  --output-dir outputs/policy_fixed_effects \
+  --config config/policy_exposure_model_specifications.csv
+```
+
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 9, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 355 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

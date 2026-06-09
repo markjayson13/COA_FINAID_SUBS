@@ -174,4 +174,14 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
 
 This writes CSV, LaTeX, and Word versions of the fixed-effects table.
 
+To audit the Pell policy-shock registry before building any exposure design:
+
+```bash
+PYTHONPATH=src python scripts/audit_policy_shocks.py \
+  --config config/policy_shocks.csv \
+  --output-dir outputs/policy_shocks
+```
+
+This checks the verified Federal Student Aid source registry and writes policy-shock audit tables. It does not estimate policy-exposure models.
+
 The exact row count depends on the upstream panel file hash. With the local input I verified on June 9, 2026, the baseline sample contained 35,443 institution-years and 2,774 institutions. The public-sector file contained 11,215 institution-years and 882 institutions. The private nonprofit file contained 24,228 institution-years and 1,903 institutions. Each extract wrote 355 columns. The selected raw-variable contract contained 215 variables, all present in the source panel.

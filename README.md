@@ -35,6 +35,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `config/descstat_variables.csv` lists the variables and caps used for descriptive-statistics exhibits.
 - `config/headroom_measures.csv` lists the main headroom measure and the component checks used before estimation.
 - `config/model_specifications.csv` lists the first model specifications used by the sample builder and fixed-effects estimator.
+- `config/policy_shocks.csv` records verified Pell Grant schedule changes and year-round Pell authority events.
 - `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
 - `scripts/prepare_analysis_panel.py` is the command-line entry point.
 - `scripts/audit_variable_config.py` checks the selected variables against the real panel.
@@ -45,6 +46,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
 - `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
 - `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, LaTeX, and Word.
+- `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
 - `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
@@ -53,6 +55,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/descriptive_decomposition.md` records the current sector trends and same-institution component changes.
 - `docs/pre_estimation_readiness.md` records the current complete-case model sample checks.
 - `docs/fixed_effects_baseline.md` records the current baseline fixed-effects estimates and diagnostics.
+- `docs/policy_shocks.md` documents the Pell policy-shock registry and its paper-use boundary.
 - `docs/research_design.md` fixes the first paper design, claim boundaries, and model sequence.
 - `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
 - `docs/selectivity_index.md` documents the open-admissions baseline control and the selective-admissions robustness index.
@@ -61,7 +64,7 @@ The script does not modify the source panel. It writes a derived analysis parque
 - `docs/outlier_audit.md` describes the audit-only distribution and extreme-value review before any winsorization decision.
 - `tests/` covers the main data-integrity checks with small synthetic panels.
 
-This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, and the first fixed-effects estimation pass. Policy-shock designs, final estimate tables, and manuscript exhibits remain separate next steps.
+This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, the first fixed-effects estimation pass, and a verified Pell policy-shock registry. Policy-exposure models and manuscript exhibits remain separate next steps.
 
 ## Install
 
@@ -186,6 +189,11 @@ The estimate-table script writes:
 - `outputs/estimate_tables/fixed_effects_main_table.tex`
 - `outputs/estimate_tables/fixed_effects_main_table.docx`
 - `outputs/estimate_tables/fixed_effects_table_summary.json`
+
+The policy-shock audit writes:
+
+- `outputs/policy_shocks/policy_shock_audit.csv`
+- `outputs/policy_shocks/policy_shock_summary.json`
 
 Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
 

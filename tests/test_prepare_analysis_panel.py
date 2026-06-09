@@ -16,6 +16,7 @@ from coa_finaid_subs.fixed_effects import run_fixed_effects
 from coa_finaid_subs.headroom_measures import audit_headroom_measures, load_headroom_specs
 from coa_finaid_subs.model_plan import audit_model_plan
 from coa_finaid_subs.model_samples import build_model_samples
+from coa_finaid_subs.policy_shocks import audit_policy_shock_frame, audit_policy_shocks, load_policy_shocks
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
 
 
@@ -1306,3 +1307,51 @@ def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
     assert "COA headroom x private nonprofit" in set(table["Term"])
     assert table.loc[table["Term"].eq("COA headroom"), "Estimate"].iloc[0] == "0.1200***"
     assert paths["paper_docx"].stat().st_size > 0
+
+
+def test_policy_shock_config_is_verified_and_contiguous(tmp_path: Path) -> None:
+    df = load_policy_shocks()
+    audit = audit_policy_shock_frame(df)
+
+    assert audit.issues == []
+    assert df["award_year_start"].tolist() == list(range(2009, 2024))
+    assert int(df.loc[df["award_year_start"].eq(2023), "pell_max_award"].iloc[0]) == 7_395
+    assert set(df.loc[df["pell_large_increase"].astype(str).str.lower().eq("true"), "award_year_start"]) == {
+        2010,
+        2018,
+        2020,
+        2021,
+        2022,
+        2023,
+    }
+    shocks = df.loc[df["additional_pell_authority_shock"].ne(0), "award_year_start"].tolist()
+    assert shocks == [2011, 2017]
+    assert audit.table["source_url"].str.startswith("https://fsapartners.ed.gov/").all()
+    assert set(audit.table.loc[audit.table["additional_pell_authority_shock"].ne(0), "additional_pell_source_key"]) == {
+        "FSA-P11-02",
+        "FSA-GEN-17-06",
+    }
+
+    paths = audit_policy_shocks(output_dir=tmp_path / "policy_shocks")
+    summary = pd.read_json(paths["summary"], typ="series")
+    assert int(summary["issue_count"]) == 0
+    output = pd.read_csv(paths["audit"])
+    assert "pell_max_award_pct_change" in output.columns
+
+
+def test_policy_shock_audit_fails_bad_delta() -> None:
+    df = load_policy_shocks().copy()
+    df.loc[df["award_year_start"].eq(2022), "pell_max_award_delta"] = 399
+
+    audit = audit_policy_shock_frame(df)
+
+    assert any("pell_max_award_delta mismatch" in issue for issue in audit.issues)
+
+
+def test_policy_shock_audit_fails_unofficial_source_url() -> None:
+    df = load_policy_shocks().copy()
+    df.loc[df["award_year_start"].eq(2023), "source_url"] = "https://example.com/pell"
+
+    audit = audit_policy_shock_frame(df)
+
+    assert any("non-FSA source URLs" in issue for issue in audit.issues)

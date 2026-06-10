@@ -31,6 +31,8 @@ SECTOR in (1, 2)
 year = 2009:2023
 ```
 
+Rows with missing `PSET4FLG` or `SECTOR` are excluded because they do not satisfy the sample rule. This is a sample-definition exclusion, not an imputation step.
+
 Private for-profit institutions remain an appendix or diagnostic scope unless the paper is rewritten as a three-sector design. That boundary matters because the current repository defines public and private nonprofit institutions as the baseline estimand and keeps for-profits buildable but separate.
 
 ## Unit of analysis
@@ -38,6 +40,8 @@ Private for-profit institutions remain an appendix or diagnostic scope unless th
 The unit is `UNITID` by year. The paper should not collapse the main sample to `OPEID` without a separate sensitivity design. A collapse changes the object of study from institution-year behavior to aid-program grouping behavior.
 
 The panel is intentionally unbalanced. Entry and exit are sample events unless separate evidence shows an opening, closure, merger, sector change, or Title IV status change.
+
+IPEDS `year` is an organizing index across components. It should not be read as a common event date for COA, Student Financial Aid, admissions, and finance fields. The empirical design estimates institution-year relationships in reported IPEDS data while absorbing year effects; it does not require every component to share an identical measurement day.
 
 ## Main measurement choices
 
@@ -68,6 +72,8 @@ Main aid outcomes:
 - `NET_PRICE_0_30000_CLEAN` through `NET_PRICE_OVER_110000_CLEAN` as secondary outcomes
 
 The main aid outcomes come from the IPEDS Student Financial Aid component, not finance revenue lines. Finance variables are controls and diagnostics, not the main measure of grant or loan packaging.
+
+All-undergraduate aid fields remain useful for external-validity checks, but they are not interchangeable with the FTFT outcomes. FTFT models stay closest to the pricing and aid cohort used in this paper. Undergraduate-wide models would answer a broader enrollment-incidence question.
 
 ## Controls
 
@@ -134,6 +140,10 @@ The policy design now includes event-study interactions for 2014-2023, omitting 
 
 The maximum-Pell design has a real-dollar version and nominal checks. The real-dollar version is the preferred repeated-shock design because nominal award increases partly reflect inflation. This design still needs placebo checks before any causal wording.
 
+The policy-exposure work remains a diagnostic layer for the WEAI paper. A later journal extension should treat causal identification as a separate design problem. Two plausible merged-shock paths are state-appropriations shocks for public institutions and local housing-cost shocks for allowance-based headroom. Either path would need new exposure construction, merged-data audits, and pretrend or placebo gates before causal wording.
+
+The sample ends in 2023. The manuscript can use later federal-aid changes as policy motivation, but the estimates should be described as evidence from the 2009-2023 IPEDS reporting window.
+
 ### Stage 4: mechanism and falsification checks
 
 The mechanism checks should compare allowance-like COA components with charge-like components. If headroom is an institutional allowance margin, off-campus room and board plus other expenses should be more responsive than tuition and fees.
@@ -183,4 +193,5 @@ Not allowed from IPEDS alone:
 1. Tighten the institutional-grant policy design before treating that estimate as causal, because the 2016 placebo check is not clean.
 2. Keep policy-exposure estimates separate from the baseline fixed-effects estimates.
 3. Use the reviewer model-card and sample-attrition tables when drafting the appendix.
-4. Add manuscript exhibit scripts only after the paper table order is fixed.
+4. Reserve state-appropriations and local housing-cost shock designs for the later causal extension unless the WEAI paper is deliberately reframed.
+5. Add manuscript exhibit scripts only after the paper table order is fixed.

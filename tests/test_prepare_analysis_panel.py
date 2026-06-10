@@ -388,6 +388,8 @@ def test_prepare_analysis_panel_filters_constructs_and_writes_audit_outputs(tmp_
     assert manifest.loc[manifest["varname"] == "NET_PRICE_0_30000", "group"].iloc[0] == "derived_net_price"
     assert manifest.loc[manifest["varname"] == "FLAG_IPEDS_SFA_IMPUTED", "group"].iloc[0] == "derived_metadata_flag"
     sample = pd.read_csv(scoped_output_dir / "analysis_sample_counts.csv")
+    assert int(sample.loc[sample["sample"] == "year_window", "rows"].iloc[0]) == 6
+    assert int(sample.loc[sample["sample"] == "year_window_missing_pset4flg_or_sector", "rows"].iloc[0]) == 1
     assert int(sample.loc[sample["sample"] == "analysis_four_year_titleiv_public_private_nonprofit", "rows"].iloc[0]) == 2
     balance = pd.read_csv(scoped_output_dir / "analysis_panel_balance_by_institution.csv")
     assert set(balance["UNITID"]) == {1, 2}

@@ -788,6 +788,7 @@ def validate_core_money_nonnegative(df: pd.DataFrame) -> None:
 
 
 def sample_counts(df: pd.DataFrame, year_filtered: pd.DataFrame, analysis: pd.DataFrame, sector_label: str) -> pd.DataFrame:
+    missing_status = year_filtered[year_filtered["PSET4FLG"].isna() | year_filtered["SECTOR"].isna()]
     rows = [
         {
             "sample": "input_all_rows",
@@ -802,6 +803,13 @@ def sample_counts(df: pd.DataFrame, year_filtered: pd.DataFrame, analysis: pd.Da
             "unitids": year_filtered["UNITID"].nunique(dropna=True),
             "min_year": int(year_filtered["year"].min()) if not year_filtered.empty else pd.NA,
             "max_year": int(year_filtered["year"].max()) if not year_filtered.empty else pd.NA,
+        },
+        {
+            "sample": "year_window_missing_pset4flg_or_sector",
+            "rows": len(missing_status),
+            "unitids": missing_status["UNITID"].nunique(dropna=True),
+            "min_year": int(missing_status["year"].min()) if not missing_status.empty else pd.NA,
+            "max_year": int(missing_status["year"].max()) if not missing_status.empty else pd.NA,
         },
         {
             "sample": f"analysis_four_year_titleiv_{sector_label}",
@@ -1937,7 +1945,12 @@ def prepare_analysis_panel(
     add_numeric_columns(df, [col for col in CLASSIFICATION_VARS if col in df.columns])
 
     year_filtered = df[df["year"].isin(years)].copy()
-    sample_mask = (year_filtered["PSET4FLG"] == title_iv_flag) & (year_filtered["SECTOR"].isin(sectors))
+    sample_mask = (
+        year_filtered["PSET4FLG"].notna()
+        & year_filtered["SECTOR"].notna()
+        & year_filtered["PSET4FLG"].eq(title_iv_flag)
+        & year_filtered["SECTOR"].isin(sectors)
+    )
     analysis = year_filtered.loc[sample_mask].copy()
     analysis = add_constructs(analysis)
     validate_core_money_nonnegative(analysis)

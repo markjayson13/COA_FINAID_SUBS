@@ -25,6 +25,8 @@ SECTOR in (1, 2)
 year = 2009:2023
 ```
 
+Rows with missing `PSET4FLG` or `SECTOR` do not enter this default sample because they fail the explicit sample rule.
+
 Private for-profit institutions are not part of the baseline sample. They can be built as a diagnostic sample by passing `--sectors 3` or by adding `--include-forprofit-diagnostic` to the default run.
 
 The script does not modify the source panel. It writes a derived analysis parquet and audit tables under `outputs/`, which are ignored by Git.
@@ -33,10 +35,15 @@ The script does not modify the source panel. It writes a derived analysis parque
 
 This repository studies institution-level published cost-of-attendance margins and FTFT aid outcomes. The baseline fixed-effects estimates are within-institution associations. They are not student-level packaging estimates and they are not causal policy estimates.
 
+IPEDS `year` is a reporting-year index, not one common event date for every component. COA, SFA, admissions, and finance fields can refer to different survey timing and fiscal or academic periods. The paper should describe estimates as institution-year relationships in reported IPEDS data, not as same-day behavioral responses.
+
+The observed panel ends in 2023. The paper can discuss later federal-aid changes as policy context, but it should not present the current estimates as evidence on post-2023 packaging rules unless the panel and design are extended.
+
 Use this wording:
 
 - cost-of-attendance headroom is a published institution-year non-tuition budget margin
 - the main aid outcomes use full-time, first-time Student Financial Aid fields
+- all-undergraduate aid fields are broader checks, not substitutes for the FTFT estimand
 - public and private nonprofit estimates are the headline sector results
 - pooled models are checks unless a sector-by-year fixed-effect specification supports the same reading
 - the Pell policy-exposure layer is diagnostic unless placebo and event-study checks are clean for the outcome
@@ -48,6 +55,8 @@ Do not use this wording:
 - proof that institutions inflated COA
 - causal institutional-grant response to year-round Pell
 - a full-postsecondary-sector estimate
+
+For a later journal version, the causal extension should be built as a separate merged-shock design. Plausible paths include state-appropriations shocks for public institutions or local housing-cost shocks for allowance-based headroom. Those designs are not required for the current WEAI conference version.
 
 ## What is here
 

@@ -120,4 +120,4 @@ The refreshed public-sector FE specification excludes raw `FIN_STATE_LOCAL_APPRO
 
 The baseline validation now reports zero estimation issues across all 25 configured models. The focal coefficients for all 25 baseline, sector-year, component, and sensitivity models were cross-checked against `linearmodels.PanelOLS`. The comparison found zero failures. The largest absolute coefficient difference was `3.69e-12`; the largest absolute standard-error difference was `1.85e-05`.
 
-`scripts/build_estimate_tables.py` now exports the current fixed-effects table to CSV, LaTeX, and Word under `outputs/estimate_tables/`.
+`scripts/build_estimate_tables.py` now exports the current fixed-effects table to CSV, Markdown, LaTeX, and Word under `outputs/estimate_tables/`.

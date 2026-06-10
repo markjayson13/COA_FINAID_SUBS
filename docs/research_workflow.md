@@ -297,7 +297,7 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
   --output-dir outputs/estimate_tables
 ```
 
-That script writes CSV, LaTeX, and Word versions of the current fixed-effects table.
+That script writes CSV, Markdown, LaTeX, and Word versions of the current fixed-effects table. The combined notebook `notebooks/table_exports.ipynb` rebuilds both the descriptive-statistics and fixed-effects manuscript tables and lists the export paths.
 
 ## 12. Policy-exposure diagnostics
 

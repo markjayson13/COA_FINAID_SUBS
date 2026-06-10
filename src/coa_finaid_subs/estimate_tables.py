@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from coa_finaid_subs.descstat_tables import write_latex_table, write_word_table
+from coa_finaid_subs.descstat_tables import write_latex_table, write_markdown_table, write_word_table
 
 
 DEFAULT_FIXED_EFFECTS_DIR = Path("outputs/fixed_effects")
@@ -82,6 +82,7 @@ MODEL_ORDER = [
 
 
 def significance_stars(p_value: object) -> str:
+    # Stars are added only for display; the p-value column is still exported.
     try:
         p = float(p_value)
     except (TypeError, ValueError):
@@ -110,6 +111,7 @@ def format_integer(value: object) -> str:
 
 
 def select_estimate_rows(coefficients: pd.DataFrame) -> pd.DataFrame:
+    # Keep focal coefficients plus the sector interaction and COA component checks.
     component_rows = coefficients["model_id"].astype(str).str.contains("component_horse_race") & coefficients["term"].isin(
         ["CHG2AY0", "CHG4AY0", "CHG7AY0", "CHG8AY0"]
     )
@@ -122,6 +124,7 @@ def select_estimate_rows(coefficients: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_estimate_table(coefficients: pd.DataFrame) -> pd.DataFrame:
+    # Convert raw estimator output into a table with paper-facing labels.
     selected = select_estimate_rows(coefficients)
     rows: list[dict[str, object]] = []
     for row in selected.to_dict("records"):
@@ -147,6 +150,7 @@ def build_estimate_tables(
     fixed_effects_dir: Path = DEFAULT_FIXED_EFFECTS_DIR,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> dict[str, Path]:
+    # Build every export format from the same coefficient file to avoid hand-copy errors.
     coefficients_path = fixed_effects_dir / "fixed_effects_coefficients.csv"
     diagnostics_path = fixed_effects_dir / "fixed_effects_model_diagnostics.csv"
     if not coefficients_path.exists():
@@ -161,18 +165,20 @@ def build_estimate_tables(
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = {
         "paper_csv": output_dir / "fixed_effects_main_table.csv",
+        "paper_md": output_dir / "fixed_effects_main_table.md",
         "paper_tex": output_dir / "fixed_effects_main_table.tex",
         "paper_docx": output_dir / "fixed_effects_main_table.docx",
         "summary": output_dir / "fixed_effects_table_summary.json",
     }
     table.to_csv(paths["paper_csv"], index=False)
     caption = "Fixed-effects estimates for COA headroom and aid outcomes"
-    write_latex_table(paths["paper_tex"], table, caption, "tab:fixed_effects_headroom")
     note = (
-        "Notes: Estimates absorb institution and year fixed effects. Standard errors are clustered by institution. "
+        "Estimates absorb institution and year fixed effects. Standard errors are clustered by institution. "
         "The pooled interaction row reports the private nonprofit slope difference relative to public institutions. "
         "Significance markers use normal-reference p-values: * p<0.10, ** p<0.05, *** p<0.01."
     )
+    write_markdown_table(paths["paper_md"], table, caption, note)
+    write_latex_table(paths["paper_tex"], table, caption, "tab:fixed_effects_headroom", note)
     write_word_table(paths["paper_docx"], table, caption, note)
     summary = {
         "built_at_utc": datetime.now(timezone.utc).isoformat(),

@@ -73,18 +73,18 @@ For a later journal version, the causal extension should be built as a separate 
 - `scripts/audit_variable_config.py` checks the selected variables against the real panel.
 - `scripts/audit_headroom_measures.py` checks headroom coverage, component behavior, correlations, and FTFT-cohort-weighted means.
 - `scripts/build_descriptive_decomposition.py` builds sector-year trends and same-institution COA component changes.
-- `scripts/build_descstat_tables.py` builds the paper and appendix descriptive-statistics tables.
+- `scripts/build_descstat_tables.py` builds the paper and appendix descriptive-statistics tables in CSV, Markdown, LaTeX, and Word formats.
 - `scripts/audit_model_plan.py` checks planned model variables and complete-case counts before estimation.
 - `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
 - `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
 - `scripts/crosscheck_fixed_effects.py` compares configured fixed-effects estimates with `linearmodels.PanelOLS` when the optional validation dependency is installed.
-- `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, LaTeX, and Word.
+- `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, Markdown, LaTeX, and Word.
 - `scripts/build_policy_exposure_panels.py` builds audited pre-period exposure panels for policy-exposure models.
 - `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
 - `scripts/validate_fixed_effects_outputs.py` checks fixed-effects outputs before paper use.
 - `scripts/build_policy_event_study_table.py` extracts policy event-study lead and lag coefficients after policy fixed-effects models are run.
 - `scripts/build_reviewer_tables.py` builds model cards, model-sample attrition rows, and a metadata flag glossary for reviewer-facing appendices.
-- `notebooks/01_descstat_pre_post_winsorization.ipynb` rebuilds and displays the descriptive-statistics tables.
+- `notebooks/table_exports.ipynb` rebuilds paste-ready descriptive and fixed-effects tables and prints the Word, LaTeX, Markdown, and CSV export paths.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/research_workflow.md` explains the path from the upstream `IPEDSDB_Panel` build to this repo's analysis panel, audits, model samples, and estimates.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.

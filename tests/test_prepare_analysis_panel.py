@@ -747,9 +747,11 @@ def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> Non
     assert set(paths) == {
         "full_descstat",
         "paper_csv",
+        "paper_md",
         "paper_tex",
         "paper_docx",
         "appendix_csv",
+        "appendix_md",
         "appendix_tex",
         "appendix_docx",
         "summary",
@@ -770,6 +772,8 @@ def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> Non
     assert paper["Variable"].tolist() == ["Cost of attendance", "Headroom share"]
     assert "Rows capped" in paper.columns
     assert {"p1", "p99", "Lower cap", "Upper cap"} <= set(appendix.columns)
+    assert "Descriptive statistics before and after winsorization" in paths["paper_md"].read_text(encoding="utf-8")
+    assert "\\toprule" in paths["paper_tex"].read_text(encoding="utf-8")
     assert paths["paper_docx"].stat().st_size > 0
     assert paths["appendix_docx"].stat().st_size > 0
 
@@ -1448,12 +1452,14 @@ def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
 
     paths = build_estimate_tables(fixed_effects_dir=fixed_effects_dir, output_dir=output_dir)
 
-    assert set(paths) == {"paper_csv", "paper_tex", "paper_docx", "summary"}
+    assert set(paths) == {"paper_csv", "paper_md", "paper_tex", "paper_docx", "summary"}
     for path in paths.values():
         assert path.exists()
     table = pd.read_csv(paths["paper_csv"])
     assert "COA headroom x private nonprofit" in set(table["Term"])
     assert table.loc[table["Term"].eq("COA headroom"), "Estimate"].iloc[0] == "0.1200***"
+    assert "Fixed-effects estimates for COA headroom and aid outcomes" in paths["paper_md"].read_text(encoding="utf-8")
+    assert "\\toprule" in paths["paper_tex"].read_text(encoding="utf-8")
     assert paths["paper_docx"].stat().st_size > 0
 
 

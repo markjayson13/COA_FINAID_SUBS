@@ -99,6 +99,7 @@ def load_descstat_specs(path: Path = DEFAULT_DESCSTAT_CONFIG) -> list[DescstatSp
 
 
 def winsorize_series(series: pd.Series, lower: float | None, upper: float | None) -> tuple[pd.Series, float | None, float | None, int, int]:
+    # Winsorization is only for table display. The source panel is never overwritten.
     numeric = pd.to_numeric(series, errors="coerce")
     nonnull = numeric.dropna()
     if nonnull.empty or lower is None or upper is None:
@@ -116,6 +117,7 @@ def winsorize_series(series: pd.Series, lower: float | None, upper: float | None
 
 
 def summarize_variable(df: pd.DataFrame, spec: DescstatSpec, order: int) -> dict[str, object]:
+    # Each row in the output describes one configured variable from descstat_variables.csv.
     if spec.varname not in df.columns:
         return {
             "order": order,
@@ -183,6 +185,7 @@ def build_descstat_frame(df: pd.DataFrame, specs: list[DescstatSpec]) -> pd.Data
 
 
 def paper_table(desc: pd.DataFrame) -> pd.DataFrame:
+    # The paper table keeps the columns that fit in the main manuscript.
     cols = [
         "section",
         "label",
@@ -213,6 +216,7 @@ def paper_table(desc: pd.DataFrame) -> pd.DataFrame:
 
 
 def appendix_table(desc: pd.DataFrame) -> pd.DataFrame:
+    # The appendix table keeps the full audit detail for missingness and tails.
     cols = [
         "section",
         "label",
@@ -269,6 +273,8 @@ LATEX_ESCAPE = {
     "}": r"\}",
     "~": r"\textasciitilde{}",
     "^": r"\textasciicircum{}",
+    "<": r"$<$",
+    ">": r"$>$",
 }
 
 
@@ -277,45 +283,97 @@ def latex_escape(value: object) -> str:
     return "".join(LATEX_ESCAPE.get(char, char) for char in text)
 
 
-def write_latex_table(path: Path, table: pd.DataFrame, caption: str, label: str) -> None:
-    float_cols = table.select_dtypes(include=["float"]).columns
-    formatted = table.copy()
-    for col in float_cols:
-        formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else f"{value:,.3f}")
-    column_spec = "l" * len(formatted.columns)
-    header = " & ".join(latex_escape(col) for col in formatted.columns) + r" \\"
-    lines = [
-        f"\\begin{{longtable}}{{{column_spec}}}",
-        f"\\caption{{{latex_escape(caption)}}}\\label{{{label}}}\\\\",
-        r"\hline",
-        header,
-        r"\hline",
-        r"\endfirsthead",
-        r"\hline",
-        header,
-        r"\hline",
-        r"\endhead",
-    ]
-    for row in formatted.itertuples(index=False, name=None):
-        lines.append(" & ".join(latex_escape(value) for value in row) + r" \\")
-    lines.extend([r"\hline", r"\end{longtable}", ""])
-    text = "\n".join(lines)
-    path.write_text(text, encoding="utf-8")
+LEFT_ALIGNED_COLUMNS = {"Section", "Variable", "Units", "Model", "Role", "Term"}
+
+
+def format_value(value: object, column: str) -> str:
+    # Format numbers once here so Word, Markdown, and LaTeX show the same values.
+    if pd.isna(value):
+        return ""
+    if column in {"N", "Clusters", "Rows capped", "Rows capped low", "Rows capped high"}:
+        try:
+            return f"{int(float(str(value).replace(',', ''))):,}"
+        except ValueError:
+            return str(value)
+    if column in {"p", "Within R2", "Missing share"}:
+        try:
+            return f"{float(value):.3f}"
+        except ValueError:
+            return str(value)
+    if isinstance(value, float):
+        return f"{value:,.3f}"
+    if isinstance(value, int):
+        return f"{value:,}"
+    return str(value)
 
 
 def format_export_table(table: pd.DataFrame) -> pd.DataFrame:
     formatted = table.copy()
     for col in formatted.columns:
-        if pd.api.types.is_float_dtype(formatted[col]):
-            formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else f"{value:,.3f}")
-        elif pd.api.types.is_integer_dtype(formatted[col]):
-            formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else f"{int(value):,}")
-        else:
-            formatted[col] = formatted[col].map(lambda value: "" if pd.isna(value) else str(value))
+        formatted[col] = formatted[col].map(lambda value, column=col: format_value(value, column))
     return formatted
 
 
+def latex_column_spec(columns: list[str]) -> str:
+    # Text columns stay left-aligned; numeric columns are right-aligned for readability.
+    alignments = ["l" if col in LEFT_ALIGNED_COLUMNS else "r" for col in columns]
+    return "@{}" + "".join(alignments) + "@{}"
+
+
+def write_latex_table(path: Path, table: pd.DataFrame, caption: str, label: str, note: str | None = None) -> None:
+    # The LaTeX export uses booktabs/longtable so tables can span pages cleanly.
+    formatted = format_export_table(table)
+    column_spec = latex_column_spec(list(formatted.columns))
+    header = " & ".join(latex_escape(col) for col in formatted.columns) + r" \\"
+    column_count = len(formatted.columns)
+    lines = [
+        f"\\begin{{longtable}}{{{column_spec}}}",
+        f"\\caption{{{latex_escape(caption)}}}\\label{{{label}}}\\\\",
+        r"\toprule",
+        header,
+        r"\midrule",
+        r"\endfirsthead",
+        f"\\caption[]{{{latex_escape(caption)} (continued)}}\\\\",
+        r"\toprule",
+        header,
+        r"\midrule",
+        r"\endhead",
+    ]
+    if note:
+        lines.extend(
+            [
+                r"\midrule",
+                f"\\multicolumn{{{column_count}}}{{p{{0.98\\linewidth}}}}{{\\footnotesize \\textit{{Notes:}} {latex_escape(note)}}}\\\\",
+                r"\endfoot",
+            ]
+        )
+    for row in formatted.itertuples(index=False, name=None):
+        lines.append(" & ".join(latex_escape(value) for value in row) + r" \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}", ""])
+    text = "\n".join(lines)
+    path.write_text(text, encoding="utf-8")
+
+
+def markdown_escape(value: object) -> str:
+    return str(value).replace("|", "\\|")
+
+
+def write_markdown_table(path: Path, table: pd.DataFrame, title: str, note: str) -> None:
+    # Markdown is the easiest preview to paste into a draft or share in review.
+    formatted = format_export_table(table)
+    columns = list(formatted.columns)
+    header = "| " + " | ".join(markdown_escape(col) for col in columns) + " |"
+    separator = "| " + " | ".join("---" if col in LEFT_ALIGNED_COLUMNS else "---:" for col in columns) + " |"
+    rows = [
+        "| " + " | ".join(markdown_escape(value) for value in row) + " |"
+        for row in formatted.itertuples(index=False, name=None)
+    ]
+    lines = [f"### {title}", "", header, separator, *rows, "", f"Notes: {note}", ""]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def write_word_table(path: Path, table: pd.DataFrame, title: str, note: str) -> None:
+    # Word output is meant for direct copy/paste into Word or Google Docs.
     try:
         from docx import Document
         from docx.enum.section import WD_ORIENT
@@ -337,6 +395,7 @@ def write_word_table(path: Path, table: pd.DataFrame, title: str, note: str) -> 
     title_paragraph = document.add_paragraph()
     title_run = title_paragraph.add_run(title)
     title_run.bold = True
+    title_run.font.name = "Times New Roman"
     title_run.font.size = Pt(11)
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -350,6 +409,7 @@ def write_word_table(path: Path, table: pd.DataFrame, title: str, note: str) -> 
         paragraph = header_cells[idx].paragraphs[0]
         run = paragraph.add_run(str(col))
         run.bold = True
+        run.font.name = "Times New Roman"
         run.font.size = Pt(8)
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         header_cells[idx].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
@@ -359,12 +419,15 @@ def write_word_table(path: Path, table: pd.DataFrame, title: str, note: str) -> 
         for idx, value in enumerate(row):
             paragraph = cells[idx].paragraphs[0]
             run = paragraph.add_run(str(value))
+            run.font.name = "Times New Roman"
             run.font.size = Pt(8)
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT if idx >= 3 else WD_ALIGN_PARAGRAPH.LEFT
+            col_name = formatted.columns[idx]
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_name in LEFT_ALIGNED_COLUMNS else WD_ALIGN_PARAGRAPH.RIGHT
             cells[idx].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
     note_paragraph = document.add_paragraph()
-    note_run = note_paragraph.add_run(note)
+    note_run = note_paragraph.add_run(f"Notes: {note}")
+    note_run.font.name = "Times New Roman"
     note_run.font.size = Pt(8)
     document.save(path)
 
@@ -375,6 +438,7 @@ def build_descstat_tables(
     config: Path = DEFAULT_DESCSTAT_CONFIG,
     scope_label: str = "public_private_nonprofit",
 ) -> dict[str, Path]:
+    # This is the single public function used by the script and the notebook.
     if not input_panel.exists():
         raise SystemExit(f"Input panel does not exist: {input_panel}")
     specs = load_descstat_specs(config)
@@ -388,9 +452,11 @@ def build_descstat_tables(
     paths = {
         "full_descstat": scoped_output / "descstat_full_pre_post_winsor.csv",
         "paper_csv": scoped_output / "descstat_paper_pre_post_winsor.csv",
+        "paper_md": scoped_output / "descstat_paper_pre_post_winsor.md",
         "paper_tex": scoped_output / "descstat_paper_pre_post_winsor.tex",
         "paper_docx": scoped_output / "descstat_paper_pre_post_winsor.docx",
         "appendix_csv": scoped_output / "descstat_appendix_pre_post_winsor.csv",
+        "appendix_md": scoped_output / "descstat_appendix_pre_post_winsor.md",
         "appendix_tex": scoped_output / "descstat_appendix_pre_post_winsor.tex",
         "appendix_docx": scoped_output / "descstat_appendix_pre_post_winsor.docx",
         "summary": scoped_output / "descstat_summary.json",
@@ -398,12 +464,14 @@ def build_descstat_tables(
     desc.to_csv(paths["full_descstat"], index=False)
     paper.to_csv(paths["paper_csv"], index=False)
     appendix.to_csv(paths["appendix_csv"], index=False)
-    write_latex_table(paths["paper_tex"], paper, "Descriptive statistics before and after winsorization", "tab:descstat_winsor")
-    write_latex_table(paths["appendix_tex"], appendix, "Appendix descriptive statistics before and after winsorization", "tab:appendix_descstat_winsor")
     note = (
-        "Notes: Winsorized columns apply only to this exhibit. The analysis panel is unchanged. "
+        "Winsorized columns apply only to this exhibit. The analysis panel is unchanged. "
         "Caps are defined in config/descstat_variables.csv."
     )
+    write_markdown_table(paths["paper_md"], paper, "Descriptive statistics before and after winsorization", note)
+    write_markdown_table(paths["appendix_md"], appendix, "Appendix descriptive statistics before and after winsorization", note)
+    write_latex_table(paths["paper_tex"], paper, "Descriptive statistics before and after winsorization", "tab:descstat_winsor", note)
+    write_latex_table(paths["appendix_tex"], appendix, "Appendix descriptive statistics before and after winsorization", "tab:appendix_descstat_winsor", note)
     write_word_table(paths["paper_docx"], paper, "Descriptive statistics before and after winsorization", note)
     write_word_table(paths["appendix_docx"], appendix, "Appendix descriptive statistics before and after winsorization", note)
     summary = {

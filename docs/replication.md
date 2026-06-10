@@ -127,9 +127,11 @@ PYTHONPATH=src python scripts/build_descstat_tables.py \
   --scope-label public_private_nonprofit
 ```
 
-The same table can be inspected in `notebooks/01_descstat_pre_post_winsorization.ipynb`. The notebook has no saved output; it rebuilds the tables from the local panel.
+The same table can be inspected in `notebooks/table_exports.ipynb`. The notebook has no saved output; it rebuilds the tables from the local panel.
 
-The table builder writes CSV, LaTeX, and Word `.docx` files for both the shorter paper table and the longer appendix table.
+The table builder writes CSV, Markdown, LaTeX, and Word `.docx` files for both the shorter paper table and the longer appendix table. The Markdown files are useful as paste-ready previews; the Word and LaTeX files are the manuscript exports.
+
+The same notebook rebuilds both the descriptive-statistics and fixed-effects manuscript tables.
 
 To check planned model samples before writing estimation code:
 
@@ -172,7 +174,7 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
   --output-dir outputs/estimate_tables
 ```
 
-This writes CSV, LaTeX, and Word versions of the fixed-effects table.
+This writes CSV, Markdown, LaTeX, and Word versions of the fixed-effects table.
 
 To build reviewer-facing model cards, sample-attrition rows, and the metadata glossary:
 

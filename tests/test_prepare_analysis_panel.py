@@ -22,6 +22,7 @@ from coa_finaid_subs.model_samples import build_model_samples
 from coa_finaid_subs.policy_exposures import build_policy_exposure_panels, load_policy_price_index
 from coa_finaid_subs.policy_shocks import audit_policy_shock_frame, audit_policy_shocks, load_policy_shocks
 from coa_finaid_subs.prepare_analysis_panel import load_variable_specs, prepare_analysis_outputs, prepare_analysis_panel
+from coa_finaid_subs.report_figures import build_report_figures
 from coa_finaid_subs.reviewer_tables import ModelBlock, build_reviewer_tables
 
 
@@ -744,18 +745,26 @@ def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> Non
         scope_label="test_scope",
     )
 
-    assert set(paths) == {
+    assert {
         "full_descstat",
         "paper_csv",
         "paper_md",
         "paper_tex",
         "paper_docx",
+        "winsor_audit_csv",
+        "winsor_audit_md",
+        "winsor_audit_tex",
+        "winsor_audit_docx",
         "appendix_csv",
         "appendix_md",
         "appendix_tex",
         "appendix_docx",
         "summary",
-    }
+        "section_cost_of_attendance_csv",
+        "section_cost_of_attendance_md",
+        "section_cost_of_attendance_tex",
+        "section_cost_of_attendance_docx",
+    } <= set(paths)
     for path in paths.values():
         assert path.exists()
 
@@ -769,12 +778,16 @@ def test_descstat_tables_write_paper_and_appendix_outputs(tmp_path: Path) -> Non
 
     paper = pd.read_csv(paths["paper_csv"])
     appendix = pd.read_csv(paths["appendix_csv"])
+    winsor = pd.read_csv(paths["winsor_audit_csv"])
     assert paper["Variable"].tolist() == ["Cost of attendance", "Headroom share"]
-    assert "Rows capped" in paper.columns
+    assert "Tail handling" in paper.columns
+    assert paper.loc[paper["Variable"].eq("Cost of attendance"), "Tail handling"].iloc[0] == "Winsorized p25-p75"
+    assert "Rows capped" in winsor.columns
     assert {"p1", "p99", "Lower cap", "Upper cap"} <= set(appendix.columns)
-    assert "Descriptive statistics before and after winsorization" in paths["paper_md"].read_text(encoding="utf-8")
+    assert "Descriptive statistics: manuscript overview" in paths["paper_md"].read_text(encoding="utf-8")
     assert "\\toprule" in paths["paper_tex"].read_text(encoding="utf-8")
     assert paths["paper_docx"].stat().st_size > 0
+    assert paths["winsor_audit_docx"].stat().st_size > 0
     assert paths["appendix_docx"].stat().st_size > 0
 
 
@@ -1452,15 +1465,171 @@ def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
 
     paths = build_estimate_tables(fixed_effects_dir=fixed_effects_dir, output_dir=output_dir)
 
-    assert set(paths) == {"paper_csv", "paper_md", "paper_tex", "paper_docx", "summary"}
+    assert {
+        "paper_csv",
+        "paper_md",
+        "paper_tex",
+        "paper_docx",
+        "aid_outcomes_csv",
+        "aid_outcomes_md",
+        "aid_outcomes_tex",
+        "aid_outcomes_docx",
+        "sector_checks_csv",
+        "sector_checks_md",
+        "sector_checks_tex",
+        "sector_checks_docx",
+        "robustness_csv",
+        "robustness_md",
+        "robustness_tex",
+        "robustness_docx",
+        "components_csv",
+        "components_md",
+        "components_tex",
+        "components_docx",
+        "appendix_csv",
+        "appendix_md",
+        "appendix_tex",
+        "appendix_docx",
+        "summary",
+    } == set(paths)
     for path in paths.values():
         assert path.exists()
     table = pd.read_csv(paths["paper_csv"])
-    assert "COA headroom x private nonprofit" in set(table["Term"])
-    assert table.loc[table["Term"].eq("COA headroom"), "Estimate"].iloc[0] == "0.1200***"
-    assert "Fixed-effects estimates for COA headroom and aid outcomes" in paths["paper_md"].read_text(encoding="utf-8")
+    assert "COA headroom x private nonprofit" in set(table["Measure"])
+    assert table.loc[table["Measure"].eq("COA headroom"), "Estimate (SE)"].iloc[0] == "0.1200*** (0.0300)"
+    assert "Main institutional-grant estimates" in paths["paper_md"].read_text(encoding="utf-8")
     assert "\\toprule" in paths["paper_tex"].read_text(encoding="utf-8")
     assert paths["paper_docx"].stat().st_size > 0
+    assert paths["appendix_docx"].stat().st_size > 0
+
+
+def test_report_figure_builder_writes_svg_and_source_data(tmp_path: Path) -> None:
+    analysis_dir = tmp_path / "analysis_panel"
+    headroom_dir = tmp_path / "headroom_measures"
+    fixed_effects_dir = tmp_path / "fixed_effects"
+    output_dir = tmp_path / "figures"
+    analysis_dir.mkdir()
+    headroom_dir.mkdir()
+    fixed_effects_dir.mkdir()
+
+    pd.DataFrame(
+        [
+            {"year": 2009, "sector": "public", "institution_years": 10, "institutions": 10},
+            {"year": 2010, "sector": "public", "institution_years": 11, "institutions": 11},
+            {"year": 2009, "sector": "private_nonprofit", "institution_years": 20, "institutions": 20},
+            {"year": 2010, "sector": "private_nonprofit", "institution_years": 19, "institutions": 19},
+        ]
+    ).to_csv(analysis_dir / "analysis_institution_years_by_sector_year.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "scope": "public_private_nonprofit",
+                "sector": "public",
+                "year": 2009,
+                "measure_id": "main_dollars",
+                "varname": "HEADROOM_MAIN",
+                "role": "primary",
+                "rows": 10,
+                "nonnull_rows": 10,
+                "mean": 100.0,
+                "p50": 100.0,
+                "ftft_weighted_mean": 110.0,
+            },
+            {
+                "scope": "public_private_nonprofit",
+                "sector": "public",
+                "year": 2010,
+                "measure_id": "main_dollars",
+                "varname": "HEADROOM_MAIN",
+                "role": "primary",
+                "rows": 11,
+                "nonnull_rows": 11,
+                "mean": 120.0,
+                "p50": 120.0,
+                "ftft_weighted_mean": 130.0,
+            },
+            {
+                "scope": "public_private_nonprofit",
+                "sector": "private_nonprofit",
+                "year": 2009,
+                "measure_id": "main_dollars",
+                "varname": "HEADROOM_MAIN",
+                "role": "primary",
+                "rows": 20,
+                "nonnull_rows": 20,
+                "mean": 150.0,
+                "p50": 150.0,
+                "ftft_weighted_mean": 160.0,
+            },
+            {
+                "scope": "public_private_nonprofit",
+                "sector": "private_nonprofit",
+                "year": 2010,
+                "measure_id": "main_dollars",
+                "varname": "HEADROOM_MAIN",
+                "role": "primary",
+                "rows": 19,
+                "nonnull_rows": 19,
+                "mean": 170.0,
+                "p50": 170.0,
+                "ftft_weighted_mean": 180.0,
+            },
+        ]
+    ).to_csv(headroom_dir / "headroom_measure_by_sector_year.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "fe_inst_grant_per_student",
+                "stage": "baseline_fe",
+                "role": "main",
+                "term": "HEADROOM_MAIN",
+                "is_focal": True,
+                "estimate": 0.12,
+                "std_error": 0.03,
+                "t_stat": 4.0,
+                "p_value_normal": 0.001,
+                "nobs": 100,
+                "clusters": 10,
+                "fixed_effects": "UNITID;year",
+                "weight_variable": "",
+                "within_r_squared": 0.10,
+                "matrix_rank": 1,
+                "rank_deficient": False,
+            },
+        ]
+    ).to_csv(fixed_effects_dir / "fixed_effects_coefficients.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "model_id": "fe_inst_grant_per_student",
+                "dependent_variable": "IGRNT_PER_FTFT_COHORT",
+                "estimation_rows": 100,
+                "institutions": 10,
+            }
+        ]
+    ).to_csv(fixed_effects_dir / "fixed_effects_model_diagnostics.csv", index=False)
+
+    paths = build_report_figures(
+        analysis_dir=analysis_dir,
+        headroom_dir=headroom_dir,
+        fixed_effects_dir=fixed_effects_dir,
+        output_dir=output_dir,
+    )
+
+    assert {
+        "sample_counts_csv",
+        "sample_counts_svg",
+        "headroom_trends_csv",
+        "headroom_trends_svg",
+        "main_estimate_forest_csv",
+        "main_estimate_forest_svg",
+        "summary",
+    } == set(paths)
+    for path in paths.values():
+        assert path.exists()
+    assert "<svg" in paths["sample_counts_svg"].read_text(encoding="utf-8")
+    forest = pd.read_csv(paths["main_estimate_forest_csv"])
+    assert forest["estimate"].iloc[0] == pytest.approx(0.12)
 
 
 def test_reviewer_table_builder_writes_model_cards_and_attrition(tmp_path: Path) -> None:

@@ -73,18 +73,19 @@ For a later journal version, the causal extension should be built as a separate 
 - `scripts/audit_variable_config.py` checks the selected variables against the real panel.
 - `scripts/audit_headroom_measures.py` checks headroom coverage, component behavior, correlations, and FTFT-cohort-weighted means.
 - `scripts/build_descriptive_decomposition.py` builds sector-year trends and same-institution COA component changes.
-- `scripts/build_descstat_tables.py` builds the paper and appendix descriptive-statistics tables in CSV, Markdown, LaTeX, and Word formats.
+- `scripts/build_descstat_tables.py` builds manuscript, section-level, winsorization-audit, and appendix descriptive-statistics tables in CSV, Markdown, LaTeX, and Word formats.
 - `scripts/audit_model_plan.py` checks planned model variables and complete-case counts before estimation.
 - `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
 - `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
 - `scripts/crosscheck_fixed_effects.py` compares configured fixed-effects estimates with `linearmodels.PanelOLS` when the optional validation dependency is installed.
-- `scripts/build_estimate_tables.py` exports the current fixed-effects estimate table to CSV, Markdown, LaTeX, and Word.
+- `scripts/build_estimate_tables.py` exports split fixed-effects estimate tables to CSV, Markdown, LaTeX, and Word.
+- `scripts/build_report_figures.py` exports paper-ready SVG figures and the CSV data behind each figure.
 - `scripts/build_policy_exposure_panels.py` builds audited pre-period exposure panels for policy-exposure models.
 - `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
 - `scripts/validate_fixed_effects_outputs.py` checks fixed-effects outputs before paper use.
 - `scripts/build_policy_event_study_table.py` extracts policy event-study lead and lag coefficients after policy fixed-effects models are run.
 - `scripts/build_reviewer_tables.py` builds model cards, model-sample attrition rows, and a metadata flag glossary for reviewer-facing appendices.
-- `notebooks/table_exports.ipynb` rebuilds paste-ready descriptive and fixed-effects tables and prints the Word, LaTeX, Markdown, and CSV export paths.
+- `notebooks/table_exports.ipynb` rebuilds paste-ready descriptive tables, fixed-effects tables, and figures, then prints the Word, LaTeX, Markdown, SVG, and CSV export paths.
 - `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
 - `docs/research_workflow.md` explains the path from the upstream `IPEDSDB_Panel` build to this repo's analysis panel, audits, model samples, and estimates.
 - `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
@@ -185,12 +186,16 @@ The variable audit follows the same directory layout under `outputs/variable_aud
 
 The descriptive-statistics script writes table files under `outputs/descriptive_tables/`. For the baseline scope, it writes:
 
-- `descstat_paper_pre_post_winsor.csv`
-- `descstat_paper_pre_post_winsor.tex`
-- `descstat_paper_pre_post_winsor.docx`
-- `descstat_appendix_pre_post_winsor.csv`
-- `descstat_appendix_pre_post_winsor.tex`
-- `descstat_appendix_pre_post_winsor.docx`
+- `descstat_manuscript_overview.csv`
+- `descstat_manuscript_overview.tex`
+- `descstat_manuscript_overview.docx`
+- section-specific tables named `descstat_section_*.csv`
+- `descstat_winsorization_audit.csv`
+- `descstat_winsorization_audit.tex`
+- `descstat_winsorization_audit.docx`
+- `descstat_appendix_distribution_audit.csv`
+- `descstat_appendix_distribution_audit.tex`
+- `descstat_appendix_distribution_audit.docx`
 - `descstat_full_pre_post_winsor.csv`
 - `descstat_summary.json`
 
@@ -229,10 +234,21 @@ The fixed-effects script writes:
 
 The estimate-table script writes:
 
-- `outputs/estimate_tables/fixed_effects_main_table.csv`
-- `outputs/estimate_tables/fixed_effects_main_table.tex`
-- `outputs/estimate_tables/fixed_effects_main_table.docx`
+- `outputs/estimate_tables/fixed_effects_main_institutional_grants.csv`
+- `outputs/estimate_tables/fixed_effects_aid_outcomes.csv`
+- `outputs/estimate_tables/fixed_effects_sector_checks.csv`
+- `outputs/estimate_tables/fixed_effects_robustness_checks.csv`
+- `outputs/estimate_tables/fixed_effects_component_checks.csv`
+- `outputs/estimate_tables/fixed_effects_appendix_full.csv`
 - `outputs/estimate_tables/fixed_effects_table_summary.json`
+
+The figure script writes:
+
+- `outputs/figures/figure_sample_counts_by_sector_year.svg`
+- `outputs/figures/figure_headroom_trends_by_sector.svg`
+- `outputs/figures/figure_main_estimate_forest.svg`
+- matching `figure_*.csv` files with the plotted data
+- `outputs/figures/figures_summary.json`
 
 The reviewer-table script writes:
 

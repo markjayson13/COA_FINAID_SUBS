@@ -122,7 +122,7 @@ The baseline stage also includes a component model that enters tuition and fees,
 
 This stage supports an institution-level incidence claim. It does not support a student-level packaging claim.
 
-The first implementation is now in `scripts/run_fixed_effects.py`, with the current local run summarized in `docs/fixed_effects_baseline.md`. `scripts/build_estimate_tables.py` exports the current fixed-effects table to CSV, Markdown, LaTeX, and Word.
+The first implementation is now in `scripts/run_fixed_effects.py`, with the current local run summarized in `docs/fixed_effects_baseline.md`. `scripts/build_estimate_tables.py` exports split fixed-effects tables to CSV, Markdown, LaTeX, and Word.
 
 ### Stage 3: policy exposure design
 

@@ -166,7 +166,7 @@ PYTHONPATH=src python scripts/run_fixed_effects.py \
 
 This writes coefficient tables and model diagnostics. The current checked-in summary is `docs/fixed_effects_baseline.md`.
 
-To export the current estimate table:
+To export the current estimate tables:
 
 ```bash
 PYTHONPATH=src python scripts/build_estimate_tables.py \
@@ -174,7 +174,15 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
   --output-dir outputs/estimate_tables
 ```
 
-This writes CSV, Markdown, LaTeX, and Word versions of the fixed-effects table.
+This writes CSV, Markdown, LaTeX, and Word versions of the main, diagnostic, sector, robustness, component, and appendix fixed-effects tables.
+
+To export the current figures:
+
+```bash
+PYTHONPATH=src python scripts/build_report_figures.py
+```
+
+This writes SVG figures and matching figure-data CSV files under `outputs/figures/`.
 
 To build reviewer-facing model cards, sample-attrition rows, and the metadata glossary:
 

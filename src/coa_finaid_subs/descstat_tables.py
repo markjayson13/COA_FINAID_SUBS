@@ -185,32 +185,89 @@ def build_descstat_frame(df: pd.DataFrame, specs: list[DescstatSpec]) -> pd.Data
 
 
 def paper_table(desc: pd.DataFrame) -> pd.DataFrame:
-    # The paper table keeps the columns that fit in the main manuscript.
+    table = desc[desc["present"].eq(True)].copy()
+    table["display_mean"] = table["raw_mean"].where(~table["winsorized"].astype(bool), table["winsor_mean"])
+    table["display_sd"] = table["raw_sd"].where(~table["winsorized"].astype(bool), table["winsor_sd"])
+    table["tail_handling"] = table.apply(
+        lambda row: (
+            f"Winsorized p{int(float(row['winsor_lower_quantile']) * 100)}-p{int(float(row['winsor_upper_quantile']) * 100)}"
+            if bool(row["winsorized"])
+            else "Raw"
+        ),
+        axis=1,
+    )
+    table["missing_percent"] = table["missing_share"] * 100
+    cols = [
+        "section",
+        "label",
+        "n",
+        "missing_percent",
+        "display_mean",
+        "display_sd",
+        "raw_p50",
+        "raw_p25",
+        "raw_p75",
+        "tail_handling",
+    ]
+    return table[cols].rename(
+        columns={
+            "section": "Section",
+            "label": "Variable",
+            "n": "N",
+            "missing_percent": "Missing %",
+            "display_mean": "Mean",
+            "display_sd": "SD",
+            "raw_p50": "Median",
+            "raw_p25": "p25",
+            "raw_p75": "p75",
+            "tail_handling": "Tail handling",
+        }
+    )
+
+
+def section_slug(section: str) -> str:
+    cleaned = "".join(char.lower() if char.isalnum() else "_" for char in section)
+    return "_".join(part for part in cleaned.split("_") if part)
+
+
+def split_paper_tables(paper: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    # Smaller section tables are easier to paste into a paper than one wide table.
+    return {
+        section_slug(section): rows.reset_index(drop=True)
+        for section, rows in paper.groupby("Section", sort=False)
+    }
+
+
+def winsor_audit_table(desc: pd.DataFrame) -> pd.DataFrame:
+    # This table preserves the raw-versus-capped comparison without cluttering the manuscript table.
+    table = desc[desc["present"].eq(True) & desc["winsorized"].astype(bool)].copy()
+    table["capped_percent"] = table["capped_share"] * 100
     cols = [
         "section",
         "label",
         "units",
-        "n",
         "raw_mean",
-        "raw_sd",
         "winsor_mean",
+        "raw_sd",
         "winsor_sd",
-        "raw_p50",
+        "winsor_lower_cap",
+        "winsor_upper_cap",
         "capped_total",
+        "capped_percent",
     ]
-    table = desc[desc["present"].eq(True)].copy()
     return table[cols].rename(
         columns={
             "section": "Section",
             "label": "Variable",
             "units": "Units",
-            "n": "N",
-            "raw_mean": "Mean",
-            "raw_sd": "SD",
-            "winsor_mean": "Mean, winsorized",
-            "winsor_sd": "SD, winsorized",
-            "raw_p50": "Median",
+            "raw_mean": "Raw mean",
+            "winsor_mean": "Winsorized mean",
+            "raw_sd": "Raw SD",
+            "winsor_sd": "Winsorized SD",
+            "winsor_lower_cap": "Lower cap",
+            "winsor_upper_cap": "Upper cap",
             "capped_total": "Rows capped",
+            "capped_percent": "Rows capped %",
         }
     )
 
@@ -283,7 +340,19 @@ def latex_escape(value: object) -> str:
     return "".join(LATEX_ESCAPE.get(char, char) for char in text)
 
 
-LEFT_ALIGNED_COLUMNS = {"Section", "Variable", "Units", "Model", "Role", "Term"}
+LEFT_ALIGNED_COLUMNS = {
+    "Section",
+    "Variable",
+    "Units",
+    "Model",
+    "Role",
+    "Term",
+    "Outcome",
+    "Specification",
+    "Measure",
+    "Fixed effects",
+    "Tail handling",
+}
 
 
 def format_value(value: object, column: str) -> str:
@@ -295,7 +364,7 @@ def format_value(value: object, column: str) -> str:
             return f"{int(float(str(value).replace(',', ''))):,}"
         except ValueError:
             return str(value)
-    if column in {"p", "Within R2", "Missing share"}:
+    if column in {"p", "Within R2", "Missing share", "Missing %", "Rows capped %"}:
         try:
             return f"{float(value):.3f}"
         except ValueError:
@@ -451,29 +520,54 @@ def build_descstat_tables(
     scoped_output.mkdir(parents=True, exist_ok=True)
     paths = {
         "full_descstat": scoped_output / "descstat_full_pre_post_winsor.csv",
-        "paper_csv": scoped_output / "descstat_paper_pre_post_winsor.csv",
-        "paper_md": scoped_output / "descstat_paper_pre_post_winsor.md",
-        "paper_tex": scoped_output / "descstat_paper_pre_post_winsor.tex",
-        "paper_docx": scoped_output / "descstat_paper_pre_post_winsor.docx",
-        "appendix_csv": scoped_output / "descstat_appendix_pre_post_winsor.csv",
-        "appendix_md": scoped_output / "descstat_appendix_pre_post_winsor.md",
-        "appendix_tex": scoped_output / "descstat_appendix_pre_post_winsor.tex",
-        "appendix_docx": scoped_output / "descstat_appendix_pre_post_winsor.docx",
+        "paper_csv": scoped_output / "descstat_manuscript_overview.csv",
+        "paper_md": scoped_output / "descstat_manuscript_overview.md",
+        "paper_tex": scoped_output / "descstat_manuscript_overview.tex",
+        "paper_docx": scoped_output / "descstat_manuscript_overview.docx",
+        "winsor_audit_csv": scoped_output / "descstat_winsorization_audit.csv",
+        "winsor_audit_md": scoped_output / "descstat_winsorization_audit.md",
+        "winsor_audit_tex": scoped_output / "descstat_winsorization_audit.tex",
+        "winsor_audit_docx": scoped_output / "descstat_winsorization_audit.docx",
+        "appendix_csv": scoped_output / "descstat_appendix_distribution_audit.csv",
+        "appendix_md": scoped_output / "descstat_appendix_distribution_audit.md",
+        "appendix_tex": scoped_output / "descstat_appendix_distribution_audit.tex",
+        "appendix_docx": scoped_output / "descstat_appendix_distribution_audit.docx",
         "summary": scoped_output / "descstat_summary.json",
     }
+    section_tables = split_paper_tables(paper)
+    for slug in section_tables:
+        paths[f"section_{slug}_csv"] = scoped_output / f"descstat_section_{slug}.csv"
+        paths[f"section_{slug}_md"] = scoped_output / f"descstat_section_{slug}.md"
+        paths[f"section_{slug}_tex"] = scoped_output / f"descstat_section_{slug}.tex"
+        paths[f"section_{slug}_docx"] = scoped_output / f"descstat_section_{slug}.docx"
     desc.to_csv(paths["full_descstat"], index=False)
     paper.to_csv(paths["paper_csv"], index=False)
+    winsor_audit = winsor_audit_table(desc)
+    winsor_audit.to_csv(paths["winsor_audit_csv"], index=False)
     appendix.to_csv(paths["appendix_csv"], index=False)
-    note = (
-        "Winsorized columns apply only to this exhibit. The analysis panel is unchanged. "
-        "Caps are defined in config/descstat_variables.csv."
+    manuscript_note = (
+        "Means and standard deviations use the display rule in the Tail handling column. "
+        "Winsorization is for tables only; the analysis panel is unchanged."
     )
-    write_markdown_table(paths["paper_md"], paper, "Descriptive statistics before and after winsorization", note)
-    write_markdown_table(paths["appendix_md"], appendix, "Appendix descriptive statistics before and after winsorization", note)
-    write_latex_table(paths["paper_tex"], paper, "Descriptive statistics before and after winsorization", "tab:descstat_winsor", note)
-    write_latex_table(paths["appendix_tex"], appendix, "Appendix descriptive statistics before and after winsorization", "tab:appendix_descstat_winsor", note)
-    write_word_table(paths["paper_docx"], paper, "Descriptive statistics before and after winsorization", note)
-    write_word_table(paths["appendix_docx"], appendix, "Appendix descriptive statistics before and after winsorization", note)
+    audit_note = (
+        "This audit compares raw and winsorized values for variables with p1-p99 caps in config/descstat_variables.csv. "
+        "Model estimation uses the prepared panel, not this display table."
+    )
+    write_markdown_table(paths["paper_md"], paper, "Descriptive statistics: manuscript overview", manuscript_note)
+    write_markdown_table(paths["winsor_audit_md"], winsor_audit, "Winsorization audit for descriptive statistics", audit_note)
+    write_markdown_table(paths["appendix_md"], appendix, "Appendix distribution audit for descriptive statistics", audit_note)
+    write_latex_table(paths["paper_tex"], paper, "Descriptive statistics: manuscript overview", "tab:descstat_overview", manuscript_note)
+    write_latex_table(paths["winsor_audit_tex"], winsor_audit, "Winsorization audit for descriptive statistics", "tab:descstat_winsor_audit", audit_note)
+    write_latex_table(paths["appendix_tex"], appendix, "Appendix distribution audit for descriptive statistics", "tab:appendix_descstat_distribution", audit_note)
+    write_word_table(paths["paper_docx"], paper, "Descriptive statistics: manuscript overview", manuscript_note)
+    write_word_table(paths["winsor_audit_docx"], winsor_audit, "Winsorization audit for descriptive statistics", audit_note)
+    write_word_table(paths["appendix_docx"], appendix, "Appendix distribution audit for descriptive statistics", audit_note)
+    for slug, table in section_tables.items():
+        title = f"Descriptive statistics: {table['Section'].iloc[0]}"
+        table.to_csv(paths[f"section_{slug}_csv"], index=False)
+        write_markdown_table(paths[f"section_{slug}_md"], table, title, manuscript_note)
+        write_latex_table(paths[f"section_{slug}_tex"], table, title, f"tab:descstat_{slug}", manuscript_note)
+        write_word_table(paths[f"section_{slug}_docx"], table, title, manuscript_note)
     summary = {
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
         "input_panel": str(input_panel),
@@ -484,6 +578,8 @@ def build_descstat_tables(
         "configured_variables": int(len(specs)),
         "present_variables": int(desc["present"].fillna(False).astype(bool).sum()),
         "paper_rows": int(len(paper)),
+        "section_tables": {slug: int(len(table)) for slug, table in section_tables.items()},
+        "winsor_audit_rows": int(len(winsor_audit)),
         "appendix_rows": int(len(appendix)),
         "outputs": {key: str(value) for key, value in paths.items() if key != "summary"},
     }

@@ -52,6 +52,43 @@ TERM_LABELS = {
     "CHG8AY0": "Other expenses",
 }
 
+OUTCOME_LABELS = {
+    "IGRNT_PER_FTFT_COHORT": "Institutional grants per FTFT aid-cohort student",
+    "INST_GRANT_SHARE_OF_TOTAL_GRANT_FTFT": "Institutional grant share of FTFT grant dollars",
+    "PGRNT_PER_FTFT_COHORT": "Pell grants per FTFT aid-cohort student",
+    "PELL_SHARE_OF_TOTAL_GRANT_FTFT": "Pell share of FTFT grant dollars",
+    "FLOAN_PER_FTFT_COHORT": "Federal loans per FTFT aid-cohort student",
+    "NET_PRICE_0_30000_CLEAN": "Net price, income 0-30000",
+}
+
+SPECIFICATION_LABELS = {
+    "fe_inst_grant_per_student": "Main: institution and year FE",
+    "fe_inst_grant_share": "Main: institution and year FE",
+    "fe_pell_per_student": "Aid diagnostic: institution and year FE",
+    "fe_pell_share": "Aid diagnostic: institution and year FE",
+    "fe_federal_loan_per_student": "Aid diagnostic: institution and year FE",
+    "fe_weighted_inst_grant": "FTFT-weighted check",
+    "pooled_sector_interaction_inst_grant": "Pooled sectors with private nonprofit interaction",
+    "syfe_inst_grant_per_student": "Sector-year FE check",
+    "syfe_inst_grant_share": "Sector-year FE check",
+    "syfe_pell_per_student": "Sector-year FE check",
+    "syfe_pell_share": "Sector-year FE check",
+    "syfe_federal_loan_per_student": "Sector-year FE check",
+    "syfe_pooled_sector_interaction_inst_grant": "Sector-year FE interaction check",
+    "fe_net_price_low_income": "Net-price diagnostic",
+    "syfe_net_price_low_income": "Net-price diagnostic with sector-year FE",
+    "selectivity_inst_grant": "Selective-admissions robustness sample",
+    "public_inst_grant": "Public institutions only",
+    "private_np_inst_grant": "Private nonprofit institutions only",
+    "component_horse_race_inst_grant": "COA component model, pooled sectors",
+    "public_component_horse_race_inst_grant": "COA component model, public",
+    "private_np_component_horse_race_inst_grant": "COA component model, private nonprofit",
+    "sensitivity_min_years_10_inst_grant": "Minimum 10 observed years",
+    "sensitivity_balanced_inst_grant": "Balanced institution panel",
+    "sensitivity_metadata_clean_inst_grant": "No metadata-exposure rows",
+    "sensitivity_no_suspect_zero_inst_grant": "No suspect aid-zero rows",
+}
+
 MODEL_ORDER = [
     "fe_inst_grant_per_student",
     "fe_inst_grant_share",
@@ -78,6 +115,64 @@ MODEL_ORDER = [
     "sensitivity_balanced_inst_grant",
     "sensitivity_metadata_clean_inst_grant",
     "sensitivity_no_suspect_zero_inst_grant",
+]
+
+MAIN_MODELS = [
+    "fe_inst_grant_per_student",
+    "fe_weighted_inst_grant",
+    "syfe_inst_grant_per_student",
+    "public_inst_grant",
+    "private_np_inst_grant",
+    "pooled_sector_interaction_inst_grant",
+]
+
+AID_OUTCOME_MODELS = [
+    "fe_inst_grant_per_student",
+    "fe_inst_grant_share",
+    "fe_pell_per_student",
+    "fe_pell_share",
+    "fe_federal_loan_per_student",
+]
+
+SECTOR_MODELS = [
+    "public_inst_grant",
+    "private_np_inst_grant",
+    "pooled_sector_interaction_inst_grant",
+    "syfe_pooled_sector_interaction_inst_grant",
+]
+
+ROBUSTNESS_MODELS = [
+    "syfe_inst_grant_per_student",
+    "fe_net_price_low_income",
+    "syfe_net_price_low_income",
+    "selectivity_inst_grant",
+    "sensitivity_min_years_10_inst_grant",
+    "sensitivity_balanced_inst_grant",
+    "sensitivity_metadata_clean_inst_grant",
+    "sensitivity_no_suspect_zero_inst_grant",
+]
+
+COMPONENT_MODELS = [
+    "component_horse_race_inst_grant",
+    "public_component_horse_race_inst_grant",
+    "private_np_component_horse_race_inst_grant",
+]
+
+READABLE_COLUMNS = ["Outcome", "Specification", "Measure", "Estimate (SE)", "p", "N", "Institutions", "Within R2"]
+APPENDIX_COLUMNS = [
+    "Outcome",
+    "Specification",
+    "Measure",
+    "Estimate",
+    "SE",
+    "t",
+    "p",
+    "N",
+    "Institutions",
+    "Clusters",
+    "Fixed effects",
+    "Weight",
+    "Within R2",
 ]
 
 
@@ -110,6 +205,11 @@ def format_integer(value: object) -> str:
     return f"{int(value):,}"
 
 
+def format_estimate_with_se(estimate: object, std_error: object, p_value: object) -> str:
+    estimate_text = f"{format_number(estimate, 4)}{significance_stars(p_value)}"
+    return f"{estimate_text} ({format_number(std_error, 4)})"
+
+
 def select_estimate_rows(coefficients: pd.DataFrame) -> pd.DataFrame:
     # Keep focal coefficients plus the sector interaction and COA component checks.
     component_rows = coefficients["model_id"].astype(str).str.contains("component_horse_race") & coefficients["term"].isin(
@@ -123,27 +223,105 @@ def select_estimate_rows(coefficients: pd.DataFrame) -> pd.DataFrame:
     return table.sort_values(["model_order", "term_order", "model_id", "term"]).reset_index(drop=True)
 
 
-def build_estimate_table(coefficients: pd.DataFrame) -> pd.DataFrame:
-    # Convert raw estimator output into a table with paper-facing labels.
+def merge_estimate_metadata(coefficients: pd.DataFrame, diagnostics: pd.DataFrame) -> pd.DataFrame:
+    # Diagnostics carry readable model metadata such as outcome, fixed effects, and sample size.
     selected = select_estimate_rows(coefficients)
+    diagnostic_cols = [
+        col
+        for col in [
+            "model_id",
+            "dependent_variable",
+            "focal_variable",
+            "controls",
+            "fixed_effects",
+            "weight_variable",
+            "estimation_rows",
+            "institutions",
+            "clusters",
+            "within_r_squared",
+            "stage",
+            "role",
+            "sample_filter",
+            "filter_notes",
+        ]
+        if col in diagnostics.columns
+    ]
+    if diagnostic_cols == ["model_id"]:
+        return selected
+    return selected.merge(diagnostics[diagnostic_cols], on="model_id", how="left", suffixes=("", "_diagnostic"))
+
+
+def row_value(row: dict[str, object], key: str, fallback: str | None = None) -> object:
+    value = row.get(key)
+    if pd.isna(value) and fallback is not None:
+        return row.get(fallback)
+    return value
+
+
+def outcome_label(row: dict[str, object]) -> str:
+    dependent = row_value(row, "dependent_variable")
+    if isinstance(dependent, str) and dependent:
+        return OUTCOME_LABELS.get(dependent, dependent)
+    return MODEL_LABELS.get(str(row.get("model_id")), str(row.get("model_id")))
+
+
+def readable_estimate_rows(table: pd.DataFrame) -> list[dict[str, object]]:
+    # Main tables combine estimate and standard error to reduce visual clutter.
     rows: list[dict[str, object]] = []
-    for row in selected.to_dict("records"):
-        stars = significance_stars(row["p_value_normal"])
+    for row in table.to_dict("records"):
+        institutions = row_value(row, "institutions", "clusters")
         rows.append(
             {
-                "Model": MODEL_LABELS.get(row["model_id"], row["model_id"]),
-                "Role": str(row["role"]).replace("_", " "),
-                "Term": TERM_LABELS.get(row["term"], row["term"]),
-                "Estimate": f"{format_number(row['estimate'], 4)}{stars}",
+                "Outcome": outcome_label(row),
+                "Specification": SPECIFICATION_LABELS.get(str(row["model_id"]), MODEL_LABELS.get(row["model_id"], row["model_id"])),
+                "Measure": TERM_LABELS.get(row["term"], row["term"]),
+                "Estimate (SE)": format_estimate_with_se(row["estimate"], row["std_error"], row["p_value_normal"]),
+                "p": format_number(row["p_value_normal"], 3),
+                "N": format_integer(row_value(row, "estimation_rows", "nobs")),
+                "Institutions": format_integer(institutions),
+                "Within R2": format_number(row_value(row, "within_r_squared"), 3),
+            }
+        )
+    return rows
+
+
+def build_readable_estimate_table(merged: pd.DataFrame, model_ids: list[str]) -> pd.DataFrame:
+    rows = merged[merged["model_id"].isin(model_ids)].copy()
+    order = {model_id: idx for idx, model_id in enumerate(model_ids)}
+    rows["display_order"] = rows["model_id"].map(order).fillna(len(order)).astype(int)
+    rows = rows.sort_values(["display_order", "term_order", "model_id", "term"]).reset_index(drop=True)
+    return pd.DataFrame(readable_estimate_rows(rows), columns=READABLE_COLUMNS)
+
+
+def build_component_table(merged: pd.DataFrame) -> pd.DataFrame:
+    rows = merged[merged["model_id"].isin(COMPONENT_MODELS)].copy()
+    order = {model_id: idx for idx, model_id in enumerate(COMPONENT_MODELS)}
+    rows["display_order"] = rows["model_id"].map(order).fillna(len(order)).astype(int)
+    rows = rows.sort_values(["display_order", "term", "model_id"]).reset_index(drop=True)
+    return pd.DataFrame(readable_estimate_rows(rows), columns=READABLE_COLUMNS)
+
+
+def build_appendix_estimate_table(merged: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for row in merged.to_dict("records"):
+        rows.append(
+            {
+                "Outcome": outcome_label(row),
+                "Specification": SPECIFICATION_LABELS.get(str(row["model_id"]), MODEL_LABELS.get(row["model_id"], row["model_id"])),
+                "Measure": TERM_LABELS.get(row["term"], row["term"]),
+                "Estimate": f"{format_number(row['estimate'], 4)}{significance_stars(row['p_value_normal'])}",
                 "SE": f"({format_number(row['std_error'], 4)})",
                 "t": format_number(row["t_stat"], 2),
                 "p": format_number(row["p_value_normal"], 3),
-                "N": format_integer(row["nobs"]),
-                "Clusters": format_integer(row["clusters"]),
-                "Within R2": format_number(row["within_r_squared"], 3),
+                "N": format_integer(row_value(row, "estimation_rows", "nobs")),
+                "Institutions": format_integer(row_value(row, "institutions", "clusters")),
+                "Clusters": format_integer(row_value(row, "clusters")),
+                "Fixed effects": row_value(row, "fixed_effects"),
+                "Weight": row_value(row, "weight_variable"),
+                "Within R2": format_number(row_value(row, "within_r_squared"), 3),
             }
         )
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=APPENDIX_COLUMNS)
 
 
 def build_estimate_tables(
@@ -160,31 +338,75 @@ def build_estimate_tables(
 
     coefficients = pd.read_csv(coefficients_path)
     diagnostics = pd.read_csv(diagnostics_path)
-    table = build_estimate_table(coefficients)
+    merged = merge_estimate_metadata(coefficients, diagnostics)
+    tables = {
+        "paper": build_readable_estimate_table(merged, MAIN_MODELS),
+        "aid_outcomes": build_readable_estimate_table(merged, AID_OUTCOME_MODELS),
+        "sector_checks": build_readable_estimate_table(merged, SECTOR_MODELS),
+        "robustness": build_readable_estimate_table(merged, ROBUSTNESS_MODELS),
+        "components": build_component_table(merged),
+        "appendix": build_appendix_estimate_table(merged),
+    }
 
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = {
-        "paper_csv": output_dir / "fixed_effects_main_table.csv",
-        "paper_md": output_dir / "fixed_effects_main_table.md",
-        "paper_tex": output_dir / "fixed_effects_main_table.tex",
-        "paper_docx": output_dir / "fixed_effects_main_table.docx",
+        "paper_csv": output_dir / "fixed_effects_main_institutional_grants.csv",
+        "paper_md": output_dir / "fixed_effects_main_institutional_grants.md",
+        "paper_tex": output_dir / "fixed_effects_main_institutional_grants.tex",
+        "paper_docx": output_dir / "fixed_effects_main_institutional_grants.docx",
+        "aid_outcomes_csv": output_dir / "fixed_effects_aid_outcomes.csv",
+        "aid_outcomes_md": output_dir / "fixed_effects_aid_outcomes.md",
+        "aid_outcomes_tex": output_dir / "fixed_effects_aid_outcomes.tex",
+        "aid_outcomes_docx": output_dir / "fixed_effects_aid_outcomes.docx",
+        "sector_checks_csv": output_dir / "fixed_effects_sector_checks.csv",
+        "sector_checks_md": output_dir / "fixed_effects_sector_checks.md",
+        "sector_checks_tex": output_dir / "fixed_effects_sector_checks.tex",
+        "sector_checks_docx": output_dir / "fixed_effects_sector_checks.docx",
+        "robustness_csv": output_dir / "fixed_effects_robustness_checks.csv",
+        "robustness_md": output_dir / "fixed_effects_robustness_checks.md",
+        "robustness_tex": output_dir / "fixed_effects_robustness_checks.tex",
+        "robustness_docx": output_dir / "fixed_effects_robustness_checks.docx",
+        "components_csv": output_dir / "fixed_effects_component_checks.csv",
+        "components_md": output_dir / "fixed_effects_component_checks.md",
+        "components_tex": output_dir / "fixed_effects_component_checks.tex",
+        "components_docx": output_dir / "fixed_effects_component_checks.docx",
+        "appendix_csv": output_dir / "fixed_effects_appendix_full.csv",
+        "appendix_md": output_dir / "fixed_effects_appendix_full.md",
+        "appendix_tex": output_dir / "fixed_effects_appendix_full.tex",
+        "appendix_docx": output_dir / "fixed_effects_appendix_full.docx",
         "summary": output_dir / "fixed_effects_table_summary.json",
     }
-    table.to_csv(paths["paper_csv"], index=False)
-    caption = "Fixed-effects estimates for COA headroom and aid outcomes"
+    captions = {
+        "paper": "Main institutional-grant estimates",
+        "aid_outcomes": "Aid-outcome diagnostics",
+        "sector_checks": "Sector and interaction checks",
+        "robustness": "Robustness and diagnostic specifications",
+        "components": "COA component checks",
+        "appendix": "Appendix fixed-effects estimate audit",
+    }
+    labels = {
+        "paper": "tab:fe_main_institutional_grants",
+        "aid_outcomes": "tab:fe_aid_outcomes",
+        "sector_checks": "tab:fe_sector_checks",
+        "robustness": "tab:fe_robustness_checks",
+        "components": "tab:fe_component_checks",
+        "appendix": "tab:fe_appendix_full",
+    }
     note = (
         "Estimates absorb institution and year fixed effects. Standard errors are clustered by institution. "
-        "The pooled interaction row reports the private nonprofit slope difference relative to public institutions. "
+        "Sector-year checks replace year fixed effects with sector-year fixed effects. "
         "Significance markers use normal-reference p-values: * p<0.10, ** p<0.05, *** p<0.01."
     )
-    write_markdown_table(paths["paper_md"], table, caption, note)
-    write_latex_table(paths["paper_tex"], table, caption, "tab:fixed_effects_headroom", note)
-    write_word_table(paths["paper_docx"], table, caption, note)
+    for table_key, table in tables.items():
+        table.to_csv(paths[f"{table_key}_csv"], index=False)
+        write_markdown_table(paths[f"{table_key}_md"], table, captions[table_key], note)
+        write_latex_table(paths[f"{table_key}_tex"], table, captions[table_key], labels[table_key], note)
+        write_word_table(paths[f"{table_key}_docx"], table, captions[table_key], note)
     summary = {
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
         "fixed_effects_dir": str(fixed_effects_dir),
         "models_in_diagnostics": int(len(diagnostics)),
-        "table_rows": int(len(table)),
+        "table_rows": {key: int(len(table)) for key, table in tables.items()},
         "outputs": {key: str(value) for key, value in paths.items() if key != "summary"},
     }
     paths["summary"].write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")

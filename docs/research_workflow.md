@@ -297,7 +297,15 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
   --output-dir outputs/estimate_tables
 ```
 
-That script writes CSV, Markdown, LaTeX, and Word versions of the current fixed-effects table. The combined notebook `notebooks/table_exports.ipynb` rebuilds both the descriptive-statistics and fixed-effects manuscript tables and lists the export paths.
+That script writes CSV, Markdown, LaTeX, and Word versions of the split fixed-effects tables: main institutional-grant estimates, aid-outcome diagnostics, sector checks, robustness checks, COA component checks, and a full appendix audit. The combined notebook `notebooks/table_exports.ipynb` rebuilds the descriptive-statistics tables, fixed-effects tables, and SVG figures, then lists the export paths.
+
+Figures are exported with:
+
+```bash
+PYTHONPATH=src python scripts/build_report_figures.py
+```
+
+The figure builder writes SVG figures plus the source CSV for each figure under `outputs/figures/`.
 
 ## 12. Policy-exposure diagnostics
 

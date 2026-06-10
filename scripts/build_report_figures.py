@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-# Builds manuscript, section-level, winsorization-audit, and appendix descriptive-statistics exports.
+# Builds paper-ready SVG figures and the CSV data behind each figure.
 # The detailed logic lives in src/ so scripts and notebooks use the same code.
-from coa_finaid_subs.descstat_tables import main
+from coa_finaid_subs.report_figures import main
 
 
 if __name__ == "__main__":

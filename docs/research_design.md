@@ -93,6 +93,8 @@ Ordinary enrollment and race-share controls remain out of the baseline until the
 
 ## Evidence ladder
 
+For the WEAI paper, the evidence ladder has five ordered parts: measure the published COA margin, describe sector and component patterns, estimate sector-specific within-institution associations, stress-test those associations, and then report Pell exposure only as a diagnostic. The order is part of the claim boundary. The policy layer cannot outrank the baseline fixed-effects evidence unless the placebo and lead checks are clean, and they are not clean for the current institutional-grant policy rows.
+
 ### Stage 1: descriptive decomposition
 
 Start with sector-specific trends in COA components and aid outcomes. The goal is to show whether headroom is a meaningful empirical margin before estimating models.
@@ -120,7 +122,7 @@ The pooled models have two layers. The first uses common year fixed effects and 
 
 The baseline stage also includes a component model that enters tuition and fees, books, off-campus room and board, and other expenses side by side. That model is a mechanism check. It asks whether the aggregate headroom association is carried by allowance-like components or by charge-like components.
 
-This stage supports an institution-level incidence claim. It does not support a student-level packaging claim.
+This stage supports an institution-level incidence claim. It does not support a student-level packaging claim, and the coefficient should not be described as a student-level substitution parameter.
 
 The first implementation is now in `scripts/run_fixed_effects.py`, with the current local run summarized in `docs/fixed_effects_baseline.md`. `scripts/build_estimate_tables.py` exports split fixed-effects tables to CSV, Markdown, LaTeX, and Word.
 
@@ -140,7 +142,7 @@ The policy design now includes event-study interactions for 2014-2023, omitting 
 
 The maximum-Pell design has a real-dollar version and nominal checks. The real-dollar version is the preferred repeated-shock design because nominal award increases partly reflect inflation. This design still needs placebo checks before any causal wording.
 
-The policy-exposure work remains a diagnostic layer for the WEAI paper. A later journal extension should treat causal identification as a separate design problem. Two plausible merged-shock paths are state-appropriations shocks for public institutions and local housing-cost shocks for allowance-based headroom. Either path would need new exposure construction, merged-data audits, and pretrend or placebo gates before causal wording.
+The policy-exposure work remains a diagnostic layer for the WEAI paper. It should be used to show why the present data do not justify a causal Pell pass-through claim. A later journal extension should treat causal identification as a separate design problem. Two plausible merged-shock paths are state-appropriations shocks for public institutions and local housing-cost shocks for allowance-based headroom. Either path would need new exposure construction, merged-data audits, and pretrend or placebo gates before causal wording.
 
 The sample ends in 2023. The manuscript can use later federal-aid changes as policy motivation, but the estimates should be described as evidence from the 2009-2023 IPEDS reporting window.
 

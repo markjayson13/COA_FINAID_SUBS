@@ -95,6 +95,8 @@ The policy-exposure layer keeps national policy registries separate from the ana
 
 The current policy-exposure layer is diagnostic for the WEAI paper. A later causal paper should add external variation before making stronger incidence claims. Candidate extensions include state-appropriations shocks for public institutions and local housing-cost shocks for allowance-based headroom. Those extensions would require new merged data, exposure audits, and placebo checks.
 
+The local housing-cost extension uses HUD two-bedroom Fair Market Rent as a robustness-control layer, not as a baseline control. The raw HUD file belongs under `data/external/hud_fmr/`, and generated merge files belong under `outputs/local_housing_controls/`. The current merge uses reporting year, state abbreviation, and normalized county name because the present analysis panel does not carry county FIPS. Any use in the paper should report the merge audit, unmatched-row review, and companion FMR-control estimate audit under `outputs/local_housing_controls/fmr_control_estimates/`.
+
 The current observed panel ends in 2023. Later aid-packaging rules can motivate the policy section, but they are outside this analysis window unless a later IPEDS panel and new policy design are added.
 
 Outlier handling is audit-first. The repository now writes all-variable distribution profiles and review-candidate tables, but it does not winsorize the panel by default. Any cap, trim, or transformation rule should be added later as a named sensitivity with a variable-level reason.

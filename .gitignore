@@ -6,6 +6,7 @@ venv/
 *.egg-info/
 .DS_Store
 **/.DS_Store
+~$*.docx
 
 # Local data and generated outputs
 data/
@@ -17,3 +18,18 @@ tmp/
 *.duckdb
 *.duckdb.wal
 *.log
+
+# Local manuscripts, review packets, and binary exports
+*.docx
+*.pdf
+*.zip
+*_audit_packet*.zip
+docs/conference_manuscript_*.md
+scripts/build_conference_manuscript_docx.py
+
+# Local source data formats that should not be published from this repo
+*.xlsx
+*.xls
+*.dta
+*.sas7bdat
+*.rds

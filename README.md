@@ -1,23 +1,12 @@
 # COA_FINAID_SUBS
 
-This is the public research repository for my project on cost-of-attendance headroom and institutional grant substitution in Title IV higher education finance.
+This repository contains the public replication layer for my research on cost-of-attendance headroom and institutional grant aid in Title IV higher education finance.
 
-The repository is meant for readers who want to inspect the empirical work behind the paper: how I define the analysis sample, which IPEDS variables enter the study, how I construct the first analysis panel, and what checks run before any estimates are produced.
+It starts from a clean IPEDS institution-year panel produced upstream in [`markjayson13/IPEDSDB_Panel`](https://github.com/markjayson13/IPEDSDB_Panel). This repository does not rebuild the raw NCES/IPEDS Access databases. It defines the research sample, constructs the cost-of-attendance measures, audits the selected variables, materializes model samples, and estimates the institution-level fixed-effects models used in the paper.
 
-## Project boundary
+## Scope
 
-This project starts from a clean IPEDS panel. It does not rebuild the raw NCES/IPEDS Access databases.
-
-The upstream panel is produced in [`markjayson13/IPEDSDB_Panel`](https://github.com/markjayson13/IPEDSDB_Panel). This repository treats that panel as an input and owns the research layer: sample definition, variable selection, constructed measures, validation checks, and replication materials for this paper.
-
-The first preparation script reads:
-
-```text
-panel_clean_analysis_2004_2023.parquet
-dictionary_lake.parquet
-```
-
-The default analysis sample is four-year Title IV public and private nonprofit institutions:
+The baseline sample is four-year Title IV public and private nonprofit institutions from 2009 through 2023:
 
 ```text
 PSET4FLG = 1
@@ -25,91 +14,39 @@ SECTOR in (1, 2)
 year = 2009:2023
 ```
 
-Rows with missing `PSET4FLG` or `SECTOR` do not enter this default sample because they fail the explicit sample rule.
+Private for-profit institutions are outside the baseline sample. They remain available only as a diagnostic build.
 
-Private for-profit institutions are not part of the baseline sample. They can be built as a diagnostic sample by passing `--sectors 3` or by adding `--include-forprofit-diagnostic` to the default run.
+Generated data files are not committed. The repository publishes the code, configuration, documentation, notebooks, and tests needed to rebuild the analysis from the clean upstream panel.
 
-The script does not modify the source panel. It writes a derived analysis parquet and audit tables under `outputs/`, which are ignored by Git.
+## Claim Boundary
 
-## Claim boundary
+The project studies institution-year associations between published non-tuition cost-of-attendance headroom and full-time, first-time aid outcomes. The baseline estimates are not student-level packaging estimates and are not causal policy estimates.
 
-This repository studies institution-level published cost-of-attendance margins and FTFT aid outcomes. The baseline fixed-effects estimates are within-institution associations. They are not student-level packaging estimates and they are not causal policy estimates.
-
-IPEDS `year` is a reporting-year index, not one common event date for every component. COA, SFA, admissions, and finance fields can refer to different survey timing and fiscal or academic periods. The paper should describe estimates as institution-year relationships in reported IPEDS data, not as same-day behavioral responses.
-
-The observed panel ends in 2023. The paper can discuss later federal-aid changes as policy context, but it should not present the current estimates as evidence on post-2023 packaging rules unless the panel and design are extended.
-
-Use this wording:
+Use this language when describing the project:
 
 - cost-of-attendance headroom is a published institution-year non-tuition budget margin
 - the main aid outcomes use full-time, first-time Student Financial Aid fields
-- all-undergraduate aid fields are broader checks, not substitutes for the FTFT estimand
-- public and private nonprofit estimates are the headline sector results
-- pooled models are checks unless a sector-by-year fixed-effect specification supports the same reading
-- the Pell policy-exposure layer is diagnostic unless placebo and event-study checks are clean for the outcome
+- public and private nonprofit estimates are interpreted separately
+- pooled models and Pell policy-exposure models are diagnostic unless a design-specific validation check supports stronger language
 
-Do not use this wording:
+Avoid this language:
 
 - unused aid capacity
 - student-level grant substitution
-- proof that institutions inflated COA
-- causal institutional-grant response to year-round Pell
+- proof that institutions inflated cost of attendance
+- causal institutional-grant response to Pell changes
 - a full-postsecondary-sector estimate
 
-For a later journal version, the causal extension should be built as a separate merged-shock design. Plausible paths include state-appropriations shocks for public institutions or local housing-cost shocks for allowance-based headroom. Those designs are not required for the current WEAI conference version.
+## Repository Map
 
-## What is here
+- `config/` contains the variable contract, headroom definitions, model specifications, and policy-shock registries.
+- `src/coa_finaid_subs/` contains the reusable preparation, audit, measurement, model-sample, fixed-effects, and table-building code.
+- `scripts/` contains command-line entry points for rebuilding panels, audits, estimates, tables, figures, and robustness checks.
+- `docs/` contains the research protocol, design justification, data-decision register, measurement notes, model documentation, and replication instructions.
+- `notebooks/table_exports.ipynb` rebuilds paste-ready tables and figures for paper drafting.
+- `tests/` contains synthetic-data tests for the core data-integrity and estimation workflow.
 
-- `config/analysis_variables.csv` lists the raw IPEDS variables selected for the research extract.
-- `config/descstat_variables.csv` lists the variables and caps used for descriptive-statistics exhibits.
-- `config/headroom_measures.csv` lists the main headroom measure and the component checks used before estimation.
-- `config/model_specifications.csv` lists the first model specifications used by the sample builder and fixed-effects estimator.
-- `config/policy_exposure_designs.csv` defines the first pre-period exposure design for the 2017 year-round Pell restoration.
-- `config/policy_exposure_model_specifications.csv` lists the first policy-exposure model specifications.
-- `config/policy_price_index.csv` records the CPI-U annual averages used to express maximum Pell awards in 2023 dollars.
-- `config/policy_shocks.csv` records verified Pell Grant schedule changes and year-round Pell authority events.
-- `src/coa_finaid_subs/prepare_analysis_panel.py` contains the preparation and validation logic.
-- `scripts/prepare_analysis_panel.py` is the command-line entry point.
-- `scripts/audit_variable_config.py` checks the selected variables against the real panel.
-- `scripts/audit_headroom_measures.py` checks headroom coverage, component behavior, correlations, and FTFT-cohort-weighted means.
-- `scripts/build_descriptive_decomposition.py` builds sector-year trends and same-institution COA component changes.
-- `scripts/build_descstat_tables.py` builds manuscript, section-level, winsorization-audit, and appendix descriptive-statistics tables in CSV, Markdown, LaTeX, and Word formats.
-- `scripts/audit_model_plan.py` checks planned model variables and complete-case counts before estimation.
-- `scripts/build_model_samples.py` writes complete-case samples and pre-estimation sample diagnostics for each planned model.
-- `scripts/run_fixed_effects.py` estimates the configured institution and year fixed-effects models from the materialized samples.
-- `scripts/crosscheck_fixed_effects.py` compares configured fixed-effects estimates with `linearmodels.PanelOLS` when the optional validation dependency is installed.
-- `scripts/build_estimate_tables.py` exports split fixed-effects estimate tables to CSV, Markdown, LaTeX, and Word.
-- `scripts/build_report_figures.py` exports paper-ready SVG figures and the CSV data behind each figure.
-- `scripts/build_policy_exposure_panels.py` builds audited pre-period exposure panels for policy-exposure models.
-- `scripts/audit_policy_shocks.py` checks the Pell policy-shock registry before any exposure design uses it.
-- `scripts/validate_fixed_effects_outputs.py` checks fixed-effects outputs before paper use.
-- `scripts/build_policy_event_study_table.py` extracts policy event-study lead and lag coefficients after policy fixed-effects models are run.
-- `scripts/build_reviewer_tables.py` builds model cards, model-sample attrition rows, and a metadata flag glossary for reviewer-facing appendices.
-- `notebooks/table_exports.ipynb` rebuilds paste-ready descriptive tables, fixed-effects tables, and figures, then prints the Word, LaTeX, Markdown, SVG, and CSV export paths.
-- `docs/data_protocol.md` describes the data boundary, sample rule, and integrity checks.
-- `docs/research_workflow.md` explains the path from the upstream `IPEDSDB_Panel` build to this repo's analysis panel, audits, model samples, and estimates.
-- `docs/data_decision_register.md` links each sample, variable, and cleaning decision to code and source support.
-- `docs/design_justification.md` ties the empirical design choices to source rules, prior work, and theory.
-- `docs/headroom_measurement.md` defines the preferred headroom measure and the claim boundary for paper language.
-- `docs/headroom_measurement_audit.md` records the current coverage, weighting, and component checks from the rebuilt local panel.
-- `docs/descriptive_decomposition.md` records the current sector trends and same-institution component changes.
-- `docs/pre_estimation_readiness.md` records the current complete-case model sample checks.
-- `docs/fixed_effects_baseline.md` records the current baseline fixed-effects estimates and diagnostics.
-- `docs/estimator_validation.md` documents the optional standard-estimator cross-check.
-- `docs/model_review_tables.md` documents the reviewer-facing model-card, sample-attrition, and metadata-glossary outputs.
-- `docs/metadata_glossary.md` explains the retained IPEDS metadata, imputation, revision, and parent-child fields in plain language.
-- `docs/policy_exposure_design.md` documents the 2017 year-round Pell exposure design.
-- `docs/policy_exposure_estimates.md` records the current policy-exposure estimates and diagnostics.
-- `docs/policy_shocks.md` documents the Pell policy-shock registry and its paper-use boundary.
-- `docs/research_design.md` fixes the first paper design, claim boundaries, and model sequence.
-- `docs/variable_selection.md` explains the variable families and what is treated as primary, secondary, or control material.
-- `docs/selectivity_index.md` documents the open-admissions baseline control and the selective-admissions robustness index.
-- `docs/sample_dynamics.md` records panel balance, entry/exit definitions, sector-year counts, and external NCES context for the institution-count decline.
-- `docs/replication.md` gives the minimum commands needed to rebuild the first extract.
-- `docs/outlier_audit.md` describes the audit-only distribution and extreme-value review before any winsorization decision.
-- `tests/` covers the main data-integrity checks with small synthetic panels.
-
-This repository currently covers the analysis-panel build, measurement audits, descriptive tables, model samples, the fixed-effects estimation pass, a verified Pell policy-shock registry, event-study diagnostics for the first policy-exposure design, and exportable estimate tables. Manuscript exhibits remain a separate next step.
+Private manuscript drafts, Word exports, review packets, local data, and generated output folders are intentionally excluded from Git.
 
 ## Install
 
@@ -119,172 +56,36 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Build the analysis panel
+## Rebuild the Analysis Layer
 
-Set `IPEDSDB_ROOT` to the local panel build root:
+Set `IPEDSDB_ROOT` to the local root of the upstream clean IPEDS panel, then run:
 
 ```bash
-export IPEDSDB_ROOT="/Users/markjaysonfarol13/Projects/IPEDSDB_Paneling"
+export IPEDSDB_ROOT="/path/to/IPEDSDB_Panel"
 python scripts/prepare_analysis_panel.py
 ```
 
-The default run writes three scopes:
+The default build writes generated files under `outputs/`, including the baseline public/private nonprofit sample and separate public-only and private nonprofit samples. `outputs/` is ignored by Git.
 
-- `public_private_nonprofit`, the baseline sample
-- `public`, the public-sector sample
-- `private_nonprofit`, the private nonprofit sample
+The full replication sequence is documented in [`docs/replication.md`](docs/replication.md). The data rules and sample boundary are documented in [`docs/data_protocol.md`](docs/data_protocol.md). The design and claim boundary are documented in [`docs/research_design.md`](docs/research_design.md).
 
-You can also pass paths directly:
+## Main Workflow
+
+After the analysis panel is built, the main workflow is:
 
 ```bash
-python scripts/prepare_analysis_panel.py \
-  --input-panel "/path/to/panel_clean_analysis_2004_2023.parquet" \
-  --dictionary "/path/to/dictionary_lake.parquet" \
-  --output-dir outputs/analysis_panel
+PYTHONPATH=src python scripts/audit_variable_config.py
+PYTHONPATH=src python scripts/audit_headroom_measures.py
+PYTHONPATH=src python scripts/build_model_samples.py
+PYTHONPATH=src python scripts/run_fixed_effects.py
+PYTHONPATH=src python scripts/validate_fixed_effects_outputs.py
+PYTHONPATH=src python scripts/build_estimate_tables.py
+PYTHONPATH=src python scripts/build_report_figures.py
 ```
 
-## Outputs
+Optional robustness layers, including HUD Fair Market Rent controls and Pell policy-exposure diagnostics, are documented in the relevant files under `docs/` and configured under `config/`.
 
-The preparation script writes each scope under its own directory, for example:
-
-```text
-outputs/analysis_panel/public_private_nonprofit/
-outputs/analysis_panel/public/
-outputs/analysis_panel/private_nonprofit/
-```
-
-Each directory contains:
-
-- `analysis_panel_coa_headroom_2009_2023_<scope>.parquet`
-- `analysis_panel_selective_admissions_robustness_2009_2023_<scope>.parquet`
-- `analysis_build_summary.json`
-- `analysis_variable_manifest.csv`
-- `analysis_sample_counts.csv`
-- `analysis_panel_balance_by_institution.csv`
-- `analysis_panel_balance_summary.csv`
-- `analysis_entry_exit_by_sector_year.csv`
-- `analysis_entry_exit_reason_audit.csv`
-- `analysis_institution_years_by_sector_year.csv`
-- `analysis_min_years_sensitivity.csv`
-- `analysis_selectivity_summary.csv`
-- `analysis_missingness_by_year.csv`
-- `analysis_value_sanity.csv`
-- `analysis_aid_zero_consistency.csv`
-- `analysis_aid_zero_suspect_rows.csv`
-- `analysis_metadata_flag_summary.csv`
-- `analysis_metadata_code_summary.csv`
-
-For example, the public-only output is named `analysis_panel_coa_headroom_2009_2023_public.parquet`.
-
-The variable audit follows the same directory layout under `outputs/variable_audit/`. Each scope directory contains:
-
-- `variable_config_coverage.csv`
-- `variable_group_coverage.csv`
-- `complete_case_scenarios.csv`
-- `metadata_flag_summary.csv`
-- `metadata_code_summary.csv`
-
-The descriptive-statistics script writes table files under `outputs/descriptive_tables/`. For the baseline scope, it writes:
-
-- `descstat_manuscript_overview.csv`
-- `descstat_manuscript_overview.tex`
-- `descstat_manuscript_overview.docx`
-- section-specific tables named `descstat_section_*.csv`
-- `descstat_winsorization_audit.csv`
-- `descstat_winsorization_audit.tex`
-- `descstat_winsorization_audit.docx`
-- `descstat_appendix_distribution_audit.csv`
-- `descstat_appendix_distribution_audit.tex`
-- `descstat_appendix_distribution_audit.docx`
-- `descstat_full_pre_post_winsor.csv`
-- `descstat_summary.json`
-
-The headroom-measure audit writes:
-
-- `outputs/headroom_measures/headroom_measure_coverage.csv`
-- `outputs/headroom_measures/headroom_measure_by_sector_year.csv`
-- `outputs/headroom_measures/headroom_measure_correlations.csv`
-- `outputs/headroom_measures/headroom_measure_summary.json`
-
-The descriptive-decomposition script writes:
-
-- `outputs/descriptive_decomposition/decomposition_trends_by_sector_year.csv`
-- `outputs/descriptive_decomposition/coa_adjacent_year_component_changes.csv`
-- `outputs/descriptive_decomposition/coa_full_window_component_changes.csv`
-- `outputs/descriptive_decomposition/descriptive_decomposition_summary.json`
-
-The model-plan audit writes:
-
-- `outputs/model_plan/model_specification_coverage.csv`
-- `outputs/model_plan/model_plan_summary.json`
-
-The model-sample builder writes:
-
-- `outputs/model_samples/model_sample_manifest.csv`
-- `outputs/model_samples/model_sample_variable_missingness.csv`
-- `outputs/model_samples/model_sample_summary.json`
-- complete-case model samples under `outputs/model_samples/samples/`
-
-The fixed-effects script writes:
-
-- `outputs/fixed_effects/fixed_effects_coefficients.csv`
-- `outputs/fixed_effects/fixed_effects_focal_coefficients.csv`
-- `outputs/fixed_effects/fixed_effects_model_diagnostics.csv`
-- `outputs/fixed_effects/fixed_effects_summary.json`
-
-The estimate-table script writes:
-
-- `outputs/estimate_tables/fixed_effects_main_institutional_grants.csv`
-- `outputs/estimate_tables/fixed_effects_aid_outcomes.csv`
-- `outputs/estimate_tables/fixed_effects_sector_checks.csv`
-- `outputs/estimate_tables/fixed_effects_robustness_checks.csv`
-- `outputs/estimate_tables/fixed_effects_component_checks.csv`
-- `outputs/estimate_tables/fixed_effects_appendix_full.csv`
-- `outputs/estimate_tables/fixed_effects_table_summary.json`
-
-The figure script writes:
-
-- `outputs/figures/figure_sample_counts_by_sector_year.svg`
-- `outputs/figures/figure_headroom_trends_by_sector.svg`
-- `outputs/figures/figure_main_estimate_forest.svg`
-- matching `figure_*.csv` files with the plotted data
-- `outputs/figures/figures_summary.json`
-
-The reviewer-table script writes:
-
-- `outputs/reviewer_tables/model_cards.csv`
-- `outputs/reviewer_tables/model_sample_attrition.csv`
-- `outputs/reviewer_tables/metadata_flag_glossary.csv`
-- `outputs/reviewer_tables/reviewer_tables_summary.json`
-
-The policy-shock audit writes:
-
-- `outputs/policy_shocks/policy_shock_audit.csv`
-- `outputs/policy_shocks/policy_shock_summary.json`
-
-The policy-exposure builder writes:
-
-- `outputs/policy_exposure/policy_exposure_summary.csv`
-- `outputs/policy_exposure/policy_exposure_summary.json`
-- `outputs/policy_exposure/<scope>/policy_exposure_panel_<scope>.parquet`
-- `outputs/policy_exposure/<scope>/policy_exposure_unit_audit.csv`
-- `outputs/policy_exposure/<scope>/policy_exposure_by_year.csv`
-
-The policy-exposure model gate and estimator write:
-
-- `outputs/policy_model_plan/model_specification_coverage.csv`
-- `outputs/policy_model_samples/model_sample_manifest.csv`
-- `outputs/policy_model_samples/samples/`
-- `outputs/policy_fixed_effects/fixed_effects_coefficients.csv`
-- `outputs/policy_fixed_effects/fixed_effects_focal_coefficients.csv`
-- `outputs/policy_fixed_effects/fixed_effects_model_diagnostics.csv`
-- `outputs/policy_fixed_effects/fixed_effects_summary.json`
-- `outputs/baseline_estimation_validation/estimation_validation_summary.json`
-- `outputs/policy_estimation_validation/estimation_validation_summary.json`
-
-Generated data are not committed to this repository. The public materials are the code, configuration, documentation, tests, and small audit summaries that let another researcher rebuild and inspect the extract.
-
-## Run checks
+## Checks
 
 ```bash
 python -m pytest

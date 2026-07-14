@@ -299,13 +299,23 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
 
 That script writes CSV, Markdown, LaTeX, and Word versions of the split fixed-effects tables: main institutional-grant estimates, aid-outcome diagnostics, sector checks, robustness checks, COA component checks, and a full appendix audit. The combined notebook `notebooks/table_exports.ipynb` rebuilds the descriptive-statistics tables, fixed-effects tables, and SVG figures, then lists the export paths.
 
-Figures are exported with:
+The paper-facing estimate table is deliberately compact: sector or check, estimate with standard error, sample, and within R-squared. Constant information about the dependent variable, focal measure, fixed effects, and clustering belongs in the caption and notes. Wider exports remain available for audit and appendix use.
+
+Before drawing the figures, build the shared sector exhibit data:
 
 ```bash
-PYTHONPATH=src python scripts/build_report_figures.py
+PYTHONPATH=src python scripts/build_manuscript_exhibit_data.py
 ```
 
-The figure builder writes SVG figures plus the source CSV for each figure under `outputs/figures/`.
+This writes the sector-specific aid-outcome estimates, the selected sensitivity checks, and the complete sector robustness inventory from the same materialized samples used elsewhere. It imports the audited HUD FMR comparison rather than re-creating that control ad hoc.
+
+Figures are then exported with:
+
+```bash
+PYTHONPATH=src python scripts/build_report_figures.py --use-existing-exhibit-data
+```
+
+The main figures are the same-institution COA change decomposition and the public/private nonprofit coefficient plot across selected checks. Aid-dollar and component plots are retained for presentation or appendix use. Institution-year counts and annual headroom trends are appendix diagnostics. The figure builder writes a source CSV for every SVG under `outputs/figures/`, preventing values from being inferred or hand-entered from the graphic.
 
 ## 12. Policy-exposure diagnostics
 

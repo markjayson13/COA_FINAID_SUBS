@@ -80,10 +80,11 @@ PYTHONPATH=src python scripts/build_model_samples.py
 PYTHONPATH=src python scripts/run_fixed_effects.py
 PYTHONPATH=src python scripts/validate_fixed_effects_outputs.py
 PYTHONPATH=src python scripts/build_estimate_tables.py
-PYTHONPATH=src python scripts/build_report_figures.py
+PYTHONPATH=src python scripts/build_manuscript_exhibit_data.py
+PYTHONPATH=src python scripts/build_report_figures.py --use-existing-exhibit-data
 ```
 
-Optional robustness layers, including HUD Fair Market Rent controls and Pell policy-exposure diagnostics, are documented in the relevant files under `docs/` and configured under `config/`.
+The sector exhibit build expects the audited HUD Fair Market Rent comparison output described in `docs/local_housing_cost_controls.md`. It fails instead of silently dropping that selected robustness check. Pell policy-exposure diagnostics remain separate from the associational baseline and are documented under `docs/` and configured under `config/`.
 
 ## Checks
 

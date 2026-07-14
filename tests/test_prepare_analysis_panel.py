@@ -11,7 +11,7 @@ from coa_finaid_subs.audit_extremes import audit_extremes
 from coa_finaid_subs.audit_variable_config import audit_variable_config, audit_variable_outputs
 from coa_finaid_subs.descriptive_decomposition import build_descriptive_decomposition
 from coa_finaid_subs.descstat_tables import build_descstat_tables
-from coa_finaid_subs.estimate_tables import build_estimate_tables
+from coa_finaid_subs.estimate_tables import build_estimate_tables, build_main_sector_table
 from coa_finaid_subs.estimation_validation import validate_fixed_effects_outputs
 from coa_finaid_subs.event_study_tables import build_policy_event_study_table
 from coa_finaid_subs.fixed_effects import run_fixed_effects
@@ -1419,47 +1419,44 @@ def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
     fixed_effects_dir = tmp_path / "fixed_effects"
     output_dir = tmp_path / "estimate_tables"
     fixed_effects_dir.mkdir(parents=True)
-    coefficients = pd.DataFrame(
-        [
+    coefficient_rows = []
+    for model_id, stage, role, term, estimate, std_error, is_focal in (
+        ("fe_inst_grant_per_student", "baseline_fe", "main", "HEADROOM_MAIN", 0.12, 0.03, True),
+        ("public_inst_grant", "sector", "sector", "HEADROOM_MAIN", -0.01, 0.02, True),
+        ("private_np_inst_grant", "sector", "sector", "HEADROOM_MAIN", 0.18, 0.04, True),
+        ("syfe_pooled_sector_interaction_inst_grant", "sector_interaction", "sector_interaction", "HEADROOM_MAIN", -0.01, 0.02, True),
+        (
+            "syfe_pooled_sector_interaction_inst_grant",
+            "sector_interaction",
+            "sector_interaction",
+            "HEADROOM_MAIN_X_PRIVATE_NONPROFIT",
+            0.19,
+            0.05,
+            False,
+        ),
+    ):
+        coefficient_rows.append(
             {
-                "model_id": "fe_inst_grant_per_student",
-                "stage": "baseline_fe",
-                "role": "main",
-                "term": "HEADROOM_MAIN",
-                "is_focal": True,
-                "estimate": 0.12,
-                "std_error": 0.03,
-                "t_stat": 4.0,
-                "p_value_normal": 0.001,
+                "model_id": model_id,
+                "stage": stage,
+                "role": role,
+                "term": term,
+                "is_focal": is_focal,
+                "estimate": estimate,
+                "std_error": std_error,
+                "t_stat": estimate / std_error,
+                "p_value_normal": 0.001 if abs(estimate / std_error) >= 3 else 0.60,
                 "nobs": 100,
                 "clusters": 10,
                 "fixed_effects": "UNITID;year",
                 "weight_variable": "",
                 "within_r_squared": 0.10,
-                "matrix_rank": 1,
-                "rank_deficient": False,
-            },
-            {
-                "model_id": "pooled_sector_interaction_inst_grant",
-                "stage": "sector_interaction",
-                "role": "sector_interaction",
-                "term": "HEADROOM_MAIN_X_PRIVATE_NONPROFIT",
-                "is_focal": False,
-                "estimate": 0.75,
-                "std_error": 0.10,
-                "t_stat": 7.5,
-                "p_value_normal": 0.0001,
-                "nobs": 100,
-                "clusters": 10,
-                "fixed_effects": "UNITID;year",
-                "weight_variable": "",
-                "within_r_squared": 0.20,
                 "matrix_rank": 2,
                 "rank_deficient": False,
-            },
-        ]
-    )
-    diagnostics = pd.DataFrame([{"model_id": "fe_inst_grant_per_student"}, {"model_id": "pooled_sector_interaction_inst_grant"}])
+            }
+        )
+    coefficients = pd.DataFrame(coefficient_rows)
+    diagnostics = pd.DataFrame([{"model_id": model_id} for model_id in coefficients["model_id"].unique()])
     coefficients.to_csv(fixed_effects_dir / "fixed_effects_coefficients.csv", index=False)
     diagnostics.to_csv(fixed_effects_dir / "fixed_effects_model_diagnostics.csv", index=False)
 
@@ -1495,22 +1492,33 @@ def test_estimate_table_builder_exports_paper_formats(tmp_path: Path) -> None:
     for path in paths.values():
         assert path.exists()
     table = pd.read_csv(paths["paper_csv"])
-    assert "COA headroom x private nonprofit" in set(table["Measure"])
-    assert table.loc[table["Measure"].eq("COA headroom"), "Estimate (SE)"].iloc[0] == "0.1200*** (0.0300)"
-    assert "Main institutional-grant estimates" in paths["paper_md"].read_text(encoding="utf-8")
+    assert list(table.columns) == ["Sector / check", "Estimate (SE)", "Sample", "Within R2"]
+    assert "Private nonprofit institutions" in set(table["Sector / check"])
+    assert table.loc[table["Sector / check"].eq("Private nonprofit institutions"), "Estimate (SE)"].iloc[0] == "0.1800*** (0.0400)"
+    assert "Sector-specific institutional-grant estimates" in paths["paper_md"].read_text(encoding="utf-8")
     assert "\\toprule" in paths["paper_tex"].read_text(encoding="utf-8")
     assert paths["paper_docx"].stat().st_size > 0
     assert paths["appendix_docx"].stat().st_size > 0
+
+
+def test_main_sector_table_fails_when_a_required_estimate_is_missing() -> None:
+    incomplete = pd.DataFrame(columns=["model_id", "term"])
+    with pytest.raises(ValueError, match="Expected exactly one paper-table row"):
+        build_main_sector_table(incomplete)
 
 
 def test_report_figure_builder_writes_svg_and_source_data(tmp_path: Path) -> None:
     analysis_dir = tmp_path / "analysis_panel"
     headroom_dir = tmp_path / "headroom_measures"
     fixed_effects_dir = tmp_path / "fixed_effects"
+    decomposition_dir = tmp_path / "descriptive_decomposition"
+    manuscript_dir = tmp_path / "manuscript"
     output_dir = tmp_path / "figures"
     analysis_dir.mkdir()
     headroom_dir.mkdir()
     fixed_effects_dir.mkdir()
+    decomposition_dir.mkdir()
+    manuscript_dir.mkdir()
 
     pd.DataFrame(
         [
@@ -1576,28 +1584,33 @@ def test_report_figure_builder_writes_svg_and_source_data(tmp_path: Path) -> Non
             },
         ]
     ).to_csv(headroom_dir / "headroom_measure_by_sector_year.csv", index=False)
-    pd.DataFrame(
-        [
-            {
-                "model_id": "fe_inst_grant_per_student",
-                "stage": "baseline_fe",
-                "role": "main",
-                "term": "HEADROOM_MAIN",
-                "is_focal": True,
-                "estimate": 0.12,
-                "std_error": 0.03,
-                "t_stat": 4.0,
-                "p_value_normal": 0.001,
-                "nobs": 100,
-                "clusters": 10,
-                "fixed_effects": "UNITID;year",
-                "weight_variable": "",
-                "within_r_squared": 0.10,
-                "matrix_rank": 1,
-                "rank_deficient": False,
-            },
-        ]
-    ).to_csv(fixed_effects_dir / "fixed_effects_coefficients.csv", index=False)
+    component_rows = []
+    for model_id, base in (
+        ("public_component_horse_race_inst_grant", 0.10),
+        ("private_np_component_horse_race_inst_grant", 0.20),
+    ):
+        for term_idx, term in enumerate(("CHG2AY0", "CHG4AY0", "CHG7AY0", "CHG8AY0")):
+            component_rows.append(
+                {
+                    "model_id": model_id,
+                    "stage": "baseline_fe",
+                    "role": "component_check",
+                    "term": term,
+                    "is_focal": term_idx == 0,
+                    "estimate": base + term_idx * 0.01,
+                    "std_error": 0.03,
+                    "t_stat": 4.0,
+                    "p_value_normal": 0.001,
+                    "nobs": 100,
+                    "clusters": 10,
+                    "fixed_effects": "UNITID;year",
+                    "weight_variable": "",
+                    "within_r_squared": 0.10,
+                    "matrix_rank": 1,
+                    "rank_deficient": False,
+                }
+            )
+    pd.DataFrame(component_rows).to_csv(fixed_effects_dir / "fixed_effects_coefficients.csv", index=False)
     pd.DataFrame(
         [
             {
@@ -1609,10 +1622,80 @@ def test_report_figure_builder_writes_svg_and_source_data(tmp_path: Path) -> Non
         ]
     ).to_csv(fixed_effects_dir / "fixed_effects_model_diagnostics.csv", index=False)
 
+    pd.DataFrame(
+        [
+            {
+                "scope": "public_private_nonprofit",
+                "sector": "public",
+                "from_year": 2009,
+                "to_year": 2023,
+                "paired_institutions": 10,
+                "mean_coa_main_change": 8000.0,
+                "mean_headroom_main_change": 4500.0,
+                "mean_tuition_fees_change": 3500.0,
+            },
+            {
+                "scope": "public_private_nonprofit",
+                "sector": "private_nonprofit",
+                "from_year": 2009,
+                "to_year": 2023,
+                "paired_institutions": 20,
+                "mean_coa_main_change": 15000.0,
+                "mean_headroom_main_change": 5000.0,
+                "mean_tuition_fees_change": 10000.0,
+            },
+        ]
+    ).to_csv(decomposition_dir / "coa_full_window_component_changes.csv", index=False)
+
+    robustness_rows = []
+    for check, public, private in (
+        ("Baseline", -0.01, 0.18),
+        ("FTFT-weighted", -0.02, 0.20),
+        ("Selective-admissions sample", -0.01, 0.14),
+        ("HUD FMR local rent control", -0.01, 0.17),
+    ):
+        robustness_rows.append(
+            {
+                "check": check,
+                "public_estimate": public,
+                "public_std_error": 0.02,
+                "public_nobs": 40,
+                "public_institutions": 8,
+                "private_nonprofit_estimate": private,
+                "private_nonprofit_std_error": 0.04,
+                "private_nonprofit_nobs": 60,
+                "private_nonprofit_institutions": 12,
+            }
+        )
+    pd.DataFrame(robustness_rows).to_csv(manuscript_dir / "sector_robustness_for_manuscript.csv", index=False)
+
+    aid_rows = []
+    for outcome, public, private in (
+        ("Institutional grants", -0.01, 0.18),
+        ("Pell grants", 0.01, 0.00),
+        ("Federal loans", 0.02, 0.00),
+    ):
+        aid_rows.append(
+            {
+                "outcome": outcome,
+                "public_estimate": public,
+                "public_std_error": 0.01,
+                "public_nobs": 40,
+                "public_institutions": 8,
+                "private_nonprofit_estimate": private,
+                "private_nonprofit_std_error": 0.02,
+                "private_nonprofit_nobs": 60,
+                "private_nonprofit_institutions": 12,
+            }
+        )
+    pd.DataFrame(aid_rows).to_csv(manuscript_dir / "sector_aid_outcomes_for_manuscript.csv", index=False)
+
     paths = build_report_figures(
         analysis_dir=analysis_dir,
         headroom_dir=headroom_dir,
         fixed_effects_dir=fixed_effects_dir,
+        decomposition_dir=decomposition_dir,
+        manuscript_dir=manuscript_dir,
         output_dir=output_dir,
     )
 
@@ -1621,15 +1704,36 @@ def test_report_figure_builder_writes_svg_and_source_data(tmp_path: Path) -> Non
         "sample_counts_svg",
         "headroom_trends_csv",
         "headroom_trends_svg",
+        "coa_decomposition_csv",
+        "coa_decomposition_svg",
         "main_estimate_forest_csv",
         "main_estimate_forest_svg",
+        "aid_outcomes_csv",
+        "aid_outcomes_svg",
+        "component_checks_csv",
+        "component_checks_svg",
         "summary",
     } == set(paths)
     for path in paths.values():
         assert path.exists()
     assert "<svg" in paths["sample_counts_svg"].read_text(encoding="utf-8")
     forest = pd.read_csv(paths["main_estimate_forest_csv"])
-    assert forest["estimate"].iloc[0] == pytest.approx(0.12)
+    private_baseline = forest[forest["label"].eq("Baseline") & forest["group"].eq("Private nonprofit")].iloc[0]
+    assert private_baseline["estimate"] == pytest.approx(0.18)
+    assert private_baseline["ci_high_dollars"] > 250
+    decomposition = pd.read_csv(paths["coa_decomposition_csv"])
+    assert (decomposition["tuition_change"] + decomposition["headroom_change"]).equals(decomposition["total_change"])
+
+    pd.DataFrame(aid_rows[:-1]).to_csv(manuscript_dir / "sector_aid_outcomes_for_manuscript.csv", index=False)
+    with pytest.raises(ValueError, match="exactly one row for each required aid outcome"):
+        build_report_figures(
+            analysis_dir=analysis_dir,
+            headroom_dir=headroom_dir,
+            fixed_effects_dir=fixed_effects_dir,
+            decomposition_dir=decomposition_dir,
+            manuscript_dir=manuscript_dir,
+            output_dir=output_dir,
+        )
 
 
 def test_reviewer_table_builder_writes_model_cards_and_attrition(tmp_path: Path) -> None:

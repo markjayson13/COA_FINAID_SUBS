@@ -176,13 +176,21 @@ PYTHONPATH=src python scripts/build_estimate_tables.py \
 
 This writes CSV, Markdown, LaTeX, and Word versions of the main, diagnostic, sector, robustness, component, and appendix fixed-effects tables.
 
-To export the current figures:
+Build the sector-specific source data shared by the manuscript tables and figures:
 
 ```bash
-PYTHONPATH=src python scripts/build_report_figures.py
+PYTHONPATH=src python scripts/build_manuscript_exhibit_data.py
 ```
 
-This writes SVG figures and matching figure-data CSV files under `outputs/figures/`.
+This command re-estimates the public and private nonprofit aid outcomes and sensitivity checks from the materialized samples. It also requires the current HUD FMR comparison file under `outputs/local_housing_controls/fmr_control_estimates/`. The build stops if that selected robustness row is missing or ambiguous.
+
+Then export the current figures:
+
+```bash
+PYTHONPATH=src python scripts/build_report_figures.py --use-existing-exhibit-data
+```
+
+The figure command writes SVG files and matching figure-data CSV files under `outputs/figures/`. The main-text exhibits are the same-institution 2009-2023 COA decomposition and the sector-specific institutional-grant coefficient plot. Aid-dollar and component plots remain available for presentation or appendix use. Institution-year counts and annual headroom trends are appendix diagnostics. The CSV paired with each SVG records the exact plotted values, samples, and confidence intervals.
 
 To build reviewer-facing model cards, sample-attrition rows, and the metadata glossary:
 

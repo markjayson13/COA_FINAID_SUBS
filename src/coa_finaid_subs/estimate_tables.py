@@ -159,6 +159,7 @@ COMPONENT_MODELS = [
 ]
 
 READABLE_COLUMNS = ["Outcome", "Specification", "Measure", "Estimate (SE)", "p", "N", "Institutions", "Within R2"]
+MAIN_SECTOR_COLUMNS = ["Sector / check", "Estimate (SE)", "Sample", "Within R2"]
 APPENDIX_COLUMNS = [
     "Outcome",
     "Specification",
@@ -301,6 +302,37 @@ def build_component_table(merged: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(readable_estimate_rows(rows), columns=READABLE_COLUMNS)
 
 
+def build_main_sector_table(merged: pd.DataFrame) -> pd.DataFrame:
+    # The paper's main table is sector-first and omits columns that repeat in every row.
+    wanted = [
+        ("public_inst_grant", "HEADROOM_MAIN", "Public institutions"),
+        ("private_np_inst_grant", "HEADROOM_MAIN", "Private nonprofit institutions"),
+        ("syfe_pooled_sector_interaction_inst_grant", "HEADROOM_MAIN", "Public slope, sector-year check"),
+        (
+            "syfe_pooled_sector_interaction_inst_grant",
+            "HEADROOM_MAIN_X_PRIVATE_NONPROFIT",
+            "Private nonprofit differential, sector-year check",
+        ),
+    ]
+    rows: list[dict[str, object]] = []
+    for model_id, term, label in wanted:
+        match = merged[merged["model_id"].eq(model_id) & merged["term"].eq(term)]
+        if len(match) != 1:
+            raise ValueError(
+                f"Expected exactly one paper-table row for model_id={model_id}, term={term}; found {len(match)}"
+            )
+        row = match.iloc[0].to_dict()
+        rows.append(
+            {
+                "Sector / check": label,
+                "Estimate (SE)": format_estimate_with_se(row["estimate"], row["std_error"], row["p_value_normal"]),
+                "Sample": f"{format_integer(row_value(row, 'estimation_rows', 'nobs'))} / {format_integer(row_value(row, 'institutions', 'clusters'))}",
+                "Within R2": format_number(row_value(row, "within_r_squared"), 3),
+            }
+        )
+    return pd.DataFrame(rows, columns=MAIN_SECTOR_COLUMNS)
+
+
 def build_appendix_estimate_table(merged: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for row in merged.to_dict("records"):
@@ -340,7 +372,7 @@ def build_estimate_tables(
     diagnostics = pd.read_csv(diagnostics_path)
     merged = merge_estimate_metadata(coefficients, diagnostics)
     tables = {
-        "paper": build_readable_estimate_table(merged, MAIN_MODELS),
+        "paper": build_main_sector_table(merged),
         "aid_outcomes": build_readable_estimate_table(merged, AID_OUTCOME_MODELS),
         "sector_checks": build_readable_estimate_table(merged, SECTOR_MODELS),
         "robustness": build_readable_estimate_table(merged, ROBUSTNESS_MODELS),
@@ -377,11 +409,11 @@ def build_estimate_tables(
         "summary": output_dir / "fixed_effects_table_summary.json",
     }
     captions = {
-        "paper": "Main institutional-grant estimates",
-        "aid_outcomes": "Aid-outcome diagnostics",
+        "paper": "Sector-specific institutional-grant estimates",
+        "aid_outcomes": "Pooled aid-outcome audit",
         "sector_checks": "Sector and interaction checks",
-        "robustness": "Robustness and diagnostic specifications",
-        "components": "COA component checks",
+        "robustness": "Pooled robustness and diagnostic audit",
+        "components": "COA component audit",
         "appendix": "Appendix fixed-effects estimate audit",
     }
     labels = {
@@ -392,16 +424,23 @@ def build_estimate_tables(
         "components": "tab:fe_component_checks",
         "appendix": "tab:fe_appendix_full",
     }
-    note = (
+    default_note = (
         "Estimates absorb institution and year fixed effects. Standard errors are clustered by institution. "
         "Sector-year checks replace year fixed effects with sector-year fixed effects. "
         "Significance markers use normal-reference p-values: * p<0.10, ** p<0.05, *** p<0.01."
     )
+    notes = {key: default_note for key in tables}
+    notes["paper"] = (
+        "The first two rows are estimated separately for public and private nonprofit institutions with institution and year fixed effects. "
+        "The final two rows come from one interaction model with institution and sector-year fixed effects: the public row is the public slope, and the private nonprofit row is the differential relative to that public slope, not the implied private nonprofit slope. "
+        "Samples report institution-years / institutions. Standard errors are clustered by institution. "
+        "Significance markers use normal-reference p-values: * p<0.10, ** p<0.05, *** p<0.01."
+    )
     for table_key, table in tables.items():
         table.to_csv(paths[f"{table_key}_csv"], index=False)
-        write_markdown_table(paths[f"{table_key}_md"], table, captions[table_key], note)
-        write_latex_table(paths[f"{table_key}_tex"], table, captions[table_key], labels[table_key], note)
-        write_word_table(paths[f"{table_key}_docx"], table, captions[table_key], note)
+        write_markdown_table(paths[f"{table_key}_md"], table, captions[table_key], notes[table_key])
+        write_latex_table(paths[f"{table_key}_tex"], table, captions[table_key], labels[table_key], notes[table_key])
+        write_word_table(paths[f"{table_key}_docx"], table, captions[table_key], notes[table_key])
     summary = {
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
         "fixed_effects_dir": str(fixed_effects_dir),
